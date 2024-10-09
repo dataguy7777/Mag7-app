@@ -26,8 +26,7 @@ leveraged_5x_etf = 'XS2779861249'  # Ticker for the leveraged 5x Mag 7 ETF
 qqq3_etf = 'QQQ3'  # Ticker for the QQQ3 Leveraged ETF
 
 # List of all tickers to fetch
-all_tickers = mag7.values()
-all_tickers += [mags_etf, leveraged_5x_etf, qqq3_etf]
+all_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf]
 
 # Function to fetch data from Yahoo Finance
 def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
@@ -112,7 +111,7 @@ def calculate_weighted_portfolio(mag7_data):
         logging.error("No data available to calculate weighted portfolio.")
         return pd.DataFrame()
 
-# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, and Leveraged ETFs
+# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, Leveraged ETF, and QQQ3
 def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data):
     """
     Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF.
@@ -198,7 +197,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.25,
+            y=-0.3,
             xanchor="center",
             x=0.5
         ),  # Legend below the graph
@@ -222,15 +221,21 @@ def plot_scaled_tickers(tickers_data):
 
     for ticker, data in tickers_data.items():
         if not data.empty:
-            # Scale to 100 at the first available timestamp
-            first_price = data['Adj Close'].iloc[0]
-            scaled_prices = (data['Adj Close'] / first_price) * 100
-            fig.add_trace(go.Scatter(
-                x=data.index,
-                y=scaled_prices,
-                mode='lines',
-                name=ticker
-            ))
+            # Ensure data is sorted by date
+            data = data.sort_index()
+            # Find the first non-NaN value for scaling
+            first_valid_index = data['Adj Close'].first_valid_index()
+            if first_valid_index is not None:
+                first_price = data.loc[first_valid_index, 'Adj Close']
+                scaled_prices = (data['Adj Close'] / first_price) * 100
+                fig.add_trace(go.Scatter(
+                    x=data.index,
+                    y=scaled_prices,
+                    mode='lines',
+                    name=ticker
+                ))
+            else:
+                st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
         else:
             st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
 
@@ -243,7 +248,7 @@ def plot_scaled_tickers(tickers_data):
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.25,
+            y=-0.3,
             xanchor="center",
             x=0.5
         ),  # Legend below the graph
@@ -262,6 +267,9 @@ default_start_date = default_end_date - datetime.timedelta(days=30)  # Default t
 
 start_date = st.sidebar.date_input('Start Date', default_start_date)
 end_date = default_end_date  # End date is always today
+
+if start_date > end_date:
+    st.sidebar.error("Start date must be before or equal to end date.")
 
 st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
