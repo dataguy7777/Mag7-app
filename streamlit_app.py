@@ -23,6 +23,11 @@ mag7 = {
 # Define ETFs
 mags_etf = 'MAGS'  # Ticker for the Mag 7 ETF
 leveraged_5x_etf = 'XS2779861249'  # Ticker for the leveraged 5x Mag 7 ETF
+qqq3_etf = 'QQQ3'  # Ticker for the QQQ3 Leveraged ETF
+
+# List of all tickers to fetch
+all_tickers = mag7.values()
+all_tickers += [mags_etf, leveraged_5x_etf, qqq3_etf]
 
 # Function to fetch data from Yahoo Finance
 def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
@@ -39,7 +44,7 @@ def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
         pd.DataFrame or None: Dataframe containing stock data, or None if fetch fails.
     """
     try:
-        data = yf.download(ticker, start=start_date, end=end_date, interval=interval)
+        data = yf.download(ticker, start=start_date, end=end_date, interval=interval, progress=False)
         if data.empty:
             logging.error(f"No data fetched for ticker: {ticker}")
             return None
@@ -107,19 +112,20 @@ def calculate_weighted_portfolio(mag7_data):
         logging.error("No data available to calculate weighted portfolio.")
         return pd.DataFrame()
 
-# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, and Leveraged ETF
-def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data):
+# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, and Leveraged ETFs
+def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data):
     """
-    Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, and the Leveraged 5x ETF.
+    Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF.
 
     Args:
         mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
         weighted_portfolio (pd.DataFrame): DataFrame of the weighted portfolio.
         mags_filtered_data (pd.DataFrame): DataFrame of MAGS ETF data.
         leveraged_5x_data (pd.DataFrame): DataFrame of Leveraged 5x ETF data.
+        qqq3_data (pd.DataFrame): DataFrame of QQQ3 Leveraged ETF data.
 
     Returns:
-        Plotly figure: A line chart with all Mag 7 companies, the weighted portfolio, MAGS ETF, and Leveraged 5x ETF.
+        Plotly figure: A line chart with all Mag 7 companies, the weighted portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF.
     """
     fig = go.Figure()
 
@@ -171,9 +177,21 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
     else:
         st.warning("Leveraged 5x Mag 7 ETF data is not available, skipping in the plot.")
 
+    # Plot QQQ3 Leveraged ETF
+    if not qqq3_data.empty:
+        fig.add_trace(go.Scatter(
+            x=qqq3_data.index,
+            y=qqq3_data['Adj Close'],
+            mode='lines',
+            name='QQQ3 Leveraged ETF',
+            line=dict(dash='longdash')
+        ))
+    else:
+        st.warning("QQQ3 Leveraged ETF data is not available, skipping in the plot.")
+
     # Update layout
     fig.update_layout(
-        title="Mag 7 Companies, Weighted Portfolio, MAGS ETF, and Leveraged 5x ETF (15:30 to 22:00 CEST)",
+        title="Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF (15:30 to 22:00 CEST)",
         xaxis_title='Date',
         yaxis_title='Adjusted Close Price',
         hovermode='x unified',
@@ -189,18 +207,66 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 
     return fig
 
+# Plot all Mag 7 companies scaled to 100
+def plot_scaled_tickers(tickers_data):
+    """
+    Plot all tickers scaled to 100 at the beginning of the time series.
+
+    Args:
+        tickers_data (dict): Dictionary containing stock data for each ticker.
+
+    Returns:
+        Plotly figure: A line chart with all tickers scaled to 100.
+    """
+    fig = go.Figure()
+
+    for ticker, data in tickers_data.items():
+        if not data.empty:
+            # Scale to 100 at the first available timestamp
+            first_price = data['Adj Close'].iloc[0]
+            scaled_prices = (data['Adj Close'] / first_price) * 100
+            fig.add_trace(go.Scatter(
+                x=data.index,
+                y=scaled_prices,
+                mode='lines',
+                name=ticker
+            ))
+        else:
+            st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
+
+    # Update layout
+    fig.update_layout(
+        title="Scaled Performance of All Tickers (100 at Start)",
+        xaxis_title='Date',
+        yaxis_title='Scaled Adjusted Close Price',
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.25,
+            xanchor="center",
+            x=0.5
+        ),  # Legend below the graph
+        xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
+    )
+
+    return fig
+
 # Streamlit app layout
-st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged 5x ETF')
+st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged ETFs')
 st.sidebar.header('Settings')
 
-# Get user input for the date range (last 10 days)
-end_date = datetime.date.today()
-start_date = end_date - datetime.timedelta(days=10)
+# Get user input for the date range
+default_end_date = datetime.date.today()
+default_start_date = default_end_date - datetime.timedelta(days=30)  # Default to last 30 days
+
+start_date = st.sidebar.date_input('Start Date', default_start_date)
+end_date = default_end_date  # End date is always today
 
 st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
-# Time range for filtering
-etf_start_time = datetime.time(9, 0)      # MAGS ETF from 09:00 to 17:30 CEST
+# Time ranges for filtering
+etf_start_time = datetime.time(9, 0)      # ETFs from 09:00 to 17:30 CEST
 etf_end_time = datetime.time(17, 30)
 
 company_start_time = datetime.time(15, 30)  # Companies from 15:30 to 22:00 CEST
@@ -215,6 +281,11 @@ mags_filtered_data = filter_data_by_time_range(mags_data, etf_start_time, etf_en
 st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
 leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
 leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, etf_start_time, etf_end_time)
+
+# Fetch QQQ3 Leveraged ETF data
+st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
+qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
+qqq3_filtered_data = filter_data_by_time_range(qqq3_data, etf_start_time, etf_end_time)
 
 # Plot MAGS ETF data
 st.subheader(f"{mags_etf} ETF (9:00 to 17:30 CEST)")
@@ -255,59 +326,37 @@ for company, ticker in mag7.items():
 # Calculate the weighted portfolio for the Mag 7 companies
 weighted_portfolio = calculate_weighted_portfolio(mag7_data)
 
-# Plot all Mag 7 companies, weighted portfolio, MAGS ETF, and Leveraged 5x ETF
-st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, and Leveraged 5x ETF (15:30 to 22:00 CEST)")
+# Plot all Mag 7 companies, weighted portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF
+st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF (15:30 to 22:00 CEST)")
 fig_mag7_companies = plot_mag7_with_leveraged_etf(
     mag7_data,
     weighted_portfolio,
     mags_filtered_data,
-    leveraged_5x_filtered_data
+    leveraged_5x_filtered_data,
+    qqq3_filtered_data
 )
 
 st.plotly_chart(fig_mag7_companies)
 
-# Plot all Mag 7 companies together with shared x-axis
-def plot_mag7_companies_shared_x(mag7_data):
-    """
-    Plot all Mag 7 companies' adjusted close prices on a single graph with shared x-axis.
+# Prepare data for scaled performance plot
+st.header("Scaled Performance of All Tickers")
+scaled_tickers = {}
 
-    Args:
-        mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
+# Include all tickers: Mag 7 companies, MAGS, Leveraged 5x ETF, QQQ3
+for company, ticker in mag7.items():
+    if not mag7_data[company].empty:
+        scaled_tickers[ticker] = mag7_data[company]
+    else:
+        logging.warning(f"Skipping {company} ({ticker}) for scaled plot due to missing data.")
 
-    Returns:
-        Plotly figure: A line chart with all Mag 7 companies.
-    """
-    fig = go.Figure()
+# Add ETFs
+if not mags_filtered_data.empty:
+    scaled_tickers[mags_etf] = mags_filtered_data
+if not leveraged_5x_filtered_data.empty:
+    scaled_tickers[leveraged_5x_etf] = leveraged_5x_filtered_data
+if not qqq3_filtered_data.empty:
+    scaled_tickers[qqq3_etf] = qqq3_filtered_data
 
-    for company, data in mag7_data.items():
-        if not data.empty:
-            fig.add_trace(go.Scatter(
-                x=data.index,
-                y=data['Adj Close'],
-                mode='lines',
-                name=company
-            ))
-        else:
-            st.warning(f"No data available for {company}, skipping in the plot.")
-
-    # Update layout
-    fig.update_layout(
-        title="All Mag 7 Companies' Adjusted Close Prices (15:30 to 22:00 CEST)",
-        xaxis_title='Date',
-        yaxis_title='Adjusted Close Price',
-        hovermode='x unified',
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.25,
-            xanchor="center",
-            x=0.5
-        ),  # Legend below the graph
-        xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
-    )
-
-    return fig
-
-st.subheader("All Mag 7 Companies' Adjusted Close Prices (15:30 to 22:00 CEST)")
-fig_mag7_only = plot_mag7_companies_shared_x(mag7_data)
-st.plotly_chart(fig_mag7_only)
+# Plot scaled performance
+fig_scaled = plot_scaled_tickers(scaled_tickers)
+st.plotly_chart(fig_scaled)
