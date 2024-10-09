@@ -35,8 +35,8 @@ def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
 
     Args:
         ticker (str): Stock ticker symbol (e.g., AAPL for Apple).
-        start_date (datetime): Start date for data fetching.
-        end_date (datetime): End date for data fetching.
+        start_date (datetime.date): Start date for data fetching.
+        end_date (datetime.date): End date for data fetching.
         interval (str): Time interval for data (default is '30m').
 
     Returns:
@@ -206,7 +206,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 
     return fig
 
-# Plot all Mag 7 companies scaled to 100
+# Plot all tickers scaled to 100
 def plot_scaled_tickers(tickers_data):
     """
     Plot all tickers scaled to 100 at the beginning of the time series.
@@ -274,7 +274,7 @@ if start_date > end_date:
 st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
 # Time ranges for filtering
-etf_start_time = datetime.time(9, 0)      # ETFs from 09:00 to 17:30 CEST
+etf_start_time = datetime.time(9, 0)        # ETFs from 09:00 to 17:30 CEST
 etf_end_time = datetime.time(17, 30)
 
 company_start_time = datetime.time(15, 30)  # Companies from 15:30 to 22:00 CEST
@@ -364,6 +364,14 @@ if not leveraged_5x_filtered_data.empty:
     scaled_tickers[leveraged_5x_etf] = leveraged_5x_filtered_data
 if not qqq3_filtered_data.empty:
     scaled_tickers[qqq3_etf] = qqq3_filtered_data
+
+# Add Weighted Portfolio scaled to 100
+if not weighted_portfolio.empty:
+    # Rename the column to 'Adj Close' for consistency in scaling
+    scaled_portfolio = weighted_portfolio.rename(columns={'Weighted Portfolio': 'Adj Close'})
+    scaled_tickers['Weighted Mag 7 Portfolio'] = scaled_portfolio
+else:
+    st.warning("Weighted Mag 7 Portfolio could not be added to the scaled plot due to missing data.")
 
 # Plot scaled performance
 fig_scaled = plot_scaled_tickers(scaled_tickers)
