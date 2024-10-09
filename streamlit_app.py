@@ -158,3 +158,27 @@ fig_mags = go.Figure()
 fig_mags.add_trace(go.Scatter(x=mags_filtered_data.index, y=mags_filtered_data['Adj Close'], mode='lines', name=mags_etf))
 fig_mags.update_layout(
     title=f"{mags_etf} ETF Adjusted Close (9:00 to 17:30 CEST)",
+    xaxis_title='Date',
+    yaxis_title='Adjusted Close Price',
+    hovermode='x unified',
+    xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
+)
+st.plotly_chart(fig_mags)
+
+# Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
+st.header("Mag 7 Company Performance (15:30 to 22:00 CEST)")
+mag7_data = {}
+
+for company, ticker in mag7.items():
+    data = fetch_stock_data(ticker, start_date, end_date)
+    filtered_data = filter_data_by_time_range(data, company_start_time, company_end_time)
+    mag7_data[company] = filtered_data
+
+# Calculate the weighted portfolio for the Mag 7 companies
+weighted_portfolio = calculate_weighted_portfolio(mag7_data)
+
+# Plot all Mag 7 companies, weighted portfolio, MAGS ETF, and Leveraged 5x ETF
+st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, and Leveraged 5x ETF (15:30 to 22:00 CEST)")
+fig_mag7_companies = plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_filtered_data)
+
+st.plotly_chart(fig_mag7_companies)
