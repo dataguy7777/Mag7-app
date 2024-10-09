@@ -17,6 +17,7 @@ mag7 = {
 }
 
 mags_etf = 'MAGS'  # Ticker for the Mag 7 ETF
+leveraged_5x_etf = 'XS2779861249'  # Ticker for the leveraged 5x Mag 7 ETF
 
 # Function to fetch data from Yahoo Finance
 def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
@@ -75,33 +76,49 @@ def calculate_weighted_portfolio(mag7_data):
     portfolio['Weighted Portfolio'] = portfolio.sum(axis=1)
     return portfolio[['Weighted Portfolio']]
 
-# Plot all Mag 7 companies in one graph
-def plot_mag7_companies(mag7_data):
+# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, and Leveraged ETF
+def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data):
     """
-    Plot all Mag 7 companies' stock prices on the same graph using Plotly.
+    Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, and the Leveraged 5x ETF.
     
     Args:
         mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
+        weighted_portfolio (pd.DataFrame): DataFrame of the weighted portfolio.
+        mags_filtered_data (pd.DataFrame): DataFrame of MAGS ETF data.
+        leveraged_5x_data (pd.DataFrame): DataFrame of Leveraged 5x ETF data.
     
     Returns:
-        Plotly figure: A line chart with all Mag 7 companies.
+        Plotly figure: A line chart with all Mag 7 companies, the weighted portfolio, MAGS ETF, and Leveraged 5x ETF.
     """
     fig = go.Figure()
     
+    # Plot Mag 7 companies
     for company, data in mag7_data.items():
         fig.add_trace(go.Scatter(x=data.index, y=data['Adj Close'], mode='lines', name=company))
     
+    # Plot Weighted Portfolio
+    fig.add_trace(go.Scatter(x=weighted_portfolio.index, y=weighted_portfolio['Weighted Portfolio'], mode='lines', name='Weighted Mag 7 Portfolio', line=dict(dash='dash')))
+    
+    # Plot MAGS ETF
+    fig.add_trace(go.Scatter(x=mags_filtered_data.index, y=mags_filtered_data['Adj Close'], mode='lines', name='MAGS ETF', line=dict(dash='dot')))
+    
+    # Plot Leveraged 5x ETF
+    fig.add_trace(go.Scatter(x=leveraged_5x_data.index, y=leveraged_5x_data['Adj Close'], mode='lines', name='Leveraged 5x Mag 7 ETF', line=dict(dash='dashdot')))
+    
+    # Update layout
     fig.update_layout(
-        title="Mag 7 Companies' Stock Prices (15:30 to 22:00 CEST)",
+        title="Mag 7 Companies, Weighted Portfolio, MAGS ETF, and Leveraged 5x ETF (15:30 to 22:00 CEST)",
         xaxis_title='Date',
         yaxis_title='Adjusted Close Price',
-        hovermode='x unified'
+        hovermode='x unified',
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),  # Legend below the graph
+        xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
     )
     
     return fig
 
 # Streamlit app layout
-st.title('Mag 7 Stock Data Comparison with MAGS ETF')
+st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged 5x ETF')
 st.sidebar.header('Settings')
 
 # Get user input for the date range (last 10 days)
@@ -121,6 +138,11 @@ company_end_time = datetime.time(22, 0)
 st.header(f"Comparing with MAGS ETF: {mags_etf}")
 mags_data = fetch_stock_data(mags_etf, start_date, end_date)
 mags_filtered_data = filter_data_by_time_range(mags_data, etf_start_time, etf_end_time)
+
+# Fetch Leveraged 5x ETF data
+st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
+leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
+leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, etf_start_time, etf_end_time)
 
 # Plot MAGS ETF data
 st.subheader(f"{mags_etf} ETF (9:00 to 17:30 CEST)")
@@ -147,32 +169,8 @@ for company, ticker in mag7.items():
 # Calculate the weighted portfolio for the Mag 7 companies
 weighted_portfolio = calculate_weighted_portfolio(mag7_data)
 
-# Plot the weighted portfolio against MAGS ETF
-st.subheader("Weighted Mag 7 Portfolio vs. MAGS ETF")
-
-fig_comparison = go.Figure()
-
-# Plot weighted portfolio
-fig_comparison.add_trace(go.Scatter(x=weighted_portfolio.index, y=weighted_portfolio['Weighted Portfolio'], mode='lines', name='Weighted Mag 7 Portfolio'))
-
-# Plot MAGS ETF
-fig_comparison.add_trace(go.Scatter(x=mags_filtered_data.index, y=mags_filtered_data['Adj Close'], mode='lines', name=mags_etf))
-
-fig_comparison.update_layout(
-    title="Weighted Mag 7 Portfolio vs. MAGS ETF",
-    xaxis_title='Date',
-    yaxis_title='Adjusted Close Price',
-    hovermode='x unified',
-    xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
-)
-
-st.plotly_chart(fig_comparison)
-
-# Plot all Mag 7 companies together in a single graph
-st.subheader("All Mag 7 Companies' Adjusted Close Prices (15:30 to 22:00 CEST)")
-fig_mag7_companies = plot_mag7_companies(mag7_data)
-
-# Share x-axis with the MAGS ETF graph
-fig_mag7_companies.update_layout(xaxis=dict(matches='x'))  # Share x-axis with the above graph
+# Plot all Mag 7 companies, weighted portfolio, MAGS ETF, and Leveraged 5x ETF
+st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, and Leveraged 5x ETF (15:30 to 22:00 CEST)")
+fig_mag7_companies = plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_filtered_data)
 
 st.plotly_chart(fig_mag7_companies)
