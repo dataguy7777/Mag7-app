@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import pytz
 import datetime
+import plotly.graph_objects as go
 
 # Define the companies
 mag7 = {
@@ -18,7 +19,7 @@ mag7 = {
 mag7_etf = 'QQQ'  # Example ETF representing the Mag 7 companies
 
 # Function to fetch data from Yahoo Finance
-def fetch_stock_data(ticker, start_date, end_date):
+def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
     """
     Fetch historical stock data for the given ticker.
     
@@ -26,11 +27,12 @@ def fetch_stock_data(ticker, start_date, end_date):
         ticker (str): Stock ticker symbol (e.g., AAPL for Apple).
         start_date (datetime): Start date for data fetching.
         end_date (datetime): End date for data fetching.
+        interval (str): Time interval for data (default is '30m').
     
     Returns:
         pd.DataFrame: Dataframe containing stock data.
     """
-    data = yf.download(ticker, start=start_date, end=end_date, interval='30m')
+    data = yf.download(ticker, start=start_date, end=end_date, interval=interval)
     return data
 
 # Convert to CEST and filter data for the specified time range
@@ -52,54 +54,74 @@ def filter_data_by_time_range(data, start_time, end_time):
     data_filtered = data.between_time(start_time.strftime('%H:%M'), end_time.strftime('%H:%M'))
     return data_filtered
 
-# Display the comparison
-def compare_mag7_to_etf(mag7_data, etf_data):
+# Create a plot with all Mag 7 companies stacked together
+def plot_stacked_companies(mag7_data):
     """
-    Compare the performance of the Mag 7 companies against the ETF.
+    Plot all Mag 7 companies' stock prices stacked together in one plot using Plotly.
     
     Args:
-        mag7_data (dict): Dictionary containing stock data of Mag 7 companies.
-        etf_data (pd.DataFrame): ETF stock data.
+        mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
     
     Returns:
-        None
+        Plotly figure: A stacked line chart for the Mag 7 companies.
     """
-    st.subheader('Mag 7 Company Performance vs. ETF')
-    st.line_chart(etf_data['Adj Close'], width=0, height=200, use_container_width=True)
+    fig = go.Figure()
     
     for company, data in mag7_data.items():
-        st.line_chart(data['Adj Close'], width=0, height=200, use_container_width=True)
+        fig.add_trace(go.Scatter(x=data.index, y=data['Adj Close'], mode='lines', name=company))
+    
+    fig.update_layout(
+        title="Mag 7 Companies' Stock Prices (Last 10 Days, Stacked)",
+        xaxis_title='Date',
+        yaxis_title='Adjusted Close Price',
+        hovermode='x unified'
+    )
+    
+    return fig
 
 # Streamlit app layout
 st.title('Mag 7 Stock Data Comparison')
-st.sidebar.header('Select Date Range')
+st.sidebar.header('Settings')
 
-# Get user input for the date range
-start_date = st.sidebar.date_input('Start Date', datetime.date.today() - datetime.timedelta(days=5))
-end_date = st.sidebar.date_input('End Date', datetime.date.today())
+# Get user input for the date range (last 10 days)
+end_date = datetime.date.today()
+start_date = end_date - datetime.timedelta(days=10)
+
+st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
 # Time range for filtering
-start_time = datetime.time(17, 30)
-end_time = datetime.time(22, 0)
+etf_start_time = datetime.time(9, 0)    # ETF from 09:00 to 17:30 CEST
+etf_end_time = datetime.time(17, 30)
 
-# Fetch ETF data
-st.header(f"Comparing with ETF: {mag7_etf}")
+company_start_time = datetime.time(15, 30)  # Companies from 15:30 to 22:00 CEST
+company_end_time = datetime.time(22, 0)
+
+# Fetch ETF data for Mag 7 ETF (QQQ in this case)
+st.header(f"Mag 7 ETF Performance: {mag7_etf}")
 etf_data = fetch_stock_data(mag7_etf, start_date, end_date)
-etf_filtered_data = filter_data_by_time_range(etf_data, start_time, end_time)
-st.line_chart(etf_filtered_data['Adj Close'])
+etf_filtered_data = filter_data_by_time_range(etf_data, etf_start_time, etf_end_time)
 
-# Fetch data for Mag 7 companies and filter
-st.header("Mag 7 Company Performance")
+# Plot ETF data
+st.subheader(f"{mag7_etf} ETF (9:00 to 17:30 CEST)")
+fig_etf = go.Figure()
+fig_etf.add_trace(go.Scatter(x=etf_filtered_data.index, y=etf_filtered_data['Adj Close'], mode='lines', name=mag7_etf))
+fig_etf.update_layout(
+    title=f"{mag7_etf} ETF Adjusted Close (9:00 to 17:30 CEST)",
+    xaxis_title='Date',
+    yaxis_title='Adjusted Close Price',
+    hovermode='x unified'
+)
+st.plotly_chart(fig_etf)
+
+# Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
+st.header("Mag 7 Company Performance (15:30 to 22:00 CEST)")
 mag7_data = {}
 
 for company, ticker in mag7.items():
     data = fetch_stock_data(ticker, start_date, end_date)
-    filtered_data = filter_data_by_time_range(data, start_time, end_time)
+    filtered_data = filter_data_by_time_range(data, company_start_time, company_end_time)
     mag7_data[company] = filtered_data
-    
-    # Displaying individual company data
-    st.subheader(company)
-    st.line_chart(filtered_data['Adj Close'])
 
-# Compare all Mag 7 companies to the ETF
-compare_mag7_to_etf(mag7_data, etf_filtered_data)
+# Plot all Mag 7 companies together
+fig_stacked = plot_stacked_companies(mag7_data)
+st.plotly_chart(fig_stacked)
