@@ -75,6 +75,31 @@ def calculate_weighted_portfolio(mag7_data):
     portfolio['Weighted Portfolio'] = portfolio.sum(axis=1)
     return portfolio[['Weighted Portfolio']]
 
+# Plot all Mag 7 companies in one graph
+def plot_mag7_companies(mag7_data):
+    """
+    Plot all Mag 7 companies' stock prices on the same graph using Plotly.
+    
+    Args:
+        mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
+    
+    Returns:
+        Plotly figure: A line chart with all Mag 7 companies.
+    """
+    fig = go.Figure()
+    
+    for company, data in mag7_data.items():
+        fig.add_trace(go.Scatter(x=data.index, y=data['Adj Close'], mode='lines', name=company))
+    
+    fig.update_layout(
+        title="Mag 7 Companies' Stock Prices (15:30 to 22:00 CEST)",
+        xaxis_title='Date',
+        yaxis_title='Adjusted Close Price',
+        hovermode='x unified'
+    )
+    
+    return fig
+
 # Streamlit app layout
 st.title('Mag 7 Stock Data Comparison with MAGS ETF')
 st.sidebar.header('Settings')
@@ -105,7 +130,8 @@ fig_mags.update_layout(
     title=f"{mags_etf} ETF Adjusted Close (9:00 to 17:30 CEST)",
     xaxis_title='Date',
     yaxis_title='Adjusted Close Price',
-    hovermode='x unified'
+    hovermode='x unified',
+    xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
 )
 st.plotly_chart(fig_mags)
 
@@ -136,7 +162,17 @@ fig_comparison.update_layout(
     title="Weighted Mag 7 Portfolio vs. MAGS ETF",
     xaxis_title='Date',
     yaxis_title='Adjusted Close Price',
-    hovermode='x unified'
+    hovermode='x unified',
+    xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
 )
 
 st.plotly_chart(fig_comparison)
+
+# Plot all Mag 7 companies together in a single graph
+st.subheader("All Mag 7 Companies' Adjusted Close Prices (15:30 to 22:00 CEST)")
+fig_mag7_companies = plot_mag7_companies(mag7_data)
+
+# Share x-axis with the MAGS ETF graph
+fig_mag7_companies.update_layout(xaxis=dict(matches='x'))  # Share x-axis with the above graph
+
+st.plotly_chart(fig_mag7_companies)
