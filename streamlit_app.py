@@ -21,9 +21,9 @@ mag7 = {
 }
 
 # Define ETFs
-mags_etf = 'MAGS'  # Ticker for the Mag 7 ETF
-leveraged_5x_etf = 'MAG7.MI'  # Ticker for the leveraged 5x Mag 7 ETF from Milan Stock Exchange
-qqq3_etf = 'QQQ3'  # Ticker for the QQQ3 Leveraged ETF
+mags_etf = 'MAGS'          # Ticker for the Mag 7 ETF
+leveraged_5x_etf = 'MAG7.MI'  # Ticker for the Leveraged 5x Mag 7 ETF from Milan Stock Exchange
+qqq3_etf = 'QQQ3'          # Ticker for the QQQ3 Leveraged ETF
 
 # List of all tickers to fetch
 all_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf]
@@ -348,6 +348,10 @@ st.plotly_chart(fig_mag7_companies)
 
 # Prepare data for scaled performance plot
 st.header("Scaled Performance of All Tickers")
+
+# Display the selected date range
+st.write(f"**Date Range:** {start_date} to {end_date}")
+
 scaled_tickers = {}
 
 # Include all tickers: Mag 7 companies, MAGS, Leveraged 5x ETF, QQQ3
