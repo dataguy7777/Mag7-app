@@ -209,16 +209,16 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 
     return fig
 
-# Plot all tickers scaled to 100
-def plot_scaled_tickers(tickers_data):
+# Plot selected tickers scaled to 100
+def plot_selected_scaled_tickers(tickers_data):
     """
-    Plot all tickers scaled to 100 at the beginning of the time series.
+    Plot selected tickers scaled to 100 at the beginning of the time series.
 
     Args:
         tickers_data (dict): Dictionary containing stock data for each ticker.
 
     Returns:
-        Plotly figure: A line chart with all tickers scaled to 100.
+        Plotly figure: A line chart with selected tickers scaled to 100.
     """
     fig = go.Figure()
 
@@ -244,7 +244,7 @@ def plot_scaled_tickers(tickers_data):
 
     # Update layout
     fig.update_layout(
-        title="Scaled Performance of All Tickers (100 at Start)",
+        title="Scaled Performance of Selected Tickers (100 at Start)",
         xaxis_title='Date',
         yaxis_title='Scaled Adjusted Close Price',
         hovermode='x unified',
@@ -259,6 +259,36 @@ def plot_scaled_tickers(tickers_data):
     )
 
     return fig
+
+# Function to create dataframe with values and percentage changes
+def create_dataframe(tickers_data):
+    """
+    Create a dataframe showing Adjusted Close Prices and % Change for each ticker.
+
+    Args:
+        tickers_data (dict): Dictionary containing stock data for each ticker.
+
+    Returns:
+        pd.DataFrame: Dataframe with Time as rows and MultiIndex columns (Value, % Change) for each ticker.
+    """
+    if not tickers_data:
+        return pd.DataFrame()
+
+    combined_df = pd.DataFrame()
+
+    for ticker, data in tickers_data.items():
+        if not data.empty:
+            df = data[['Adj Close']].copy()
+            df.rename(columns={'Adj Close': f'{ticker} Value'}, inplace=True)
+            df[f'{ticker} % Change'] = df[f'{ticker} Value'].pct_change() * 100
+            combined_df = combined_df.join(df, how='outer') if not combined_df.empty else df
+        else:
+            logging.warning(f"Skipping {ticker} for dataframe due to missing data.")
+
+    # Drop the first row if it contains NaN due to pct_change
+    combined_df.dropna(inplace=True)
+
+    return combined_df
 
 # Streamlit app layout with tabs
 st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged ETFs')
@@ -324,6 +354,9 @@ with tabs[0]:
         )
         st.plotly_chart(fig_mags)
 
+        # Create and display dataframe for MAGS ETF
+        st.dataframe(create_dataframe({mags_etf: mags_filtered_data}))
+
     # Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
     st.header("Mag 7 Company Performance (15:30 to 22:00 CEST)")
     mag7_data = {}
@@ -354,30 +387,28 @@ with tabs[0]:
 
     st.plotly_chart(fig_mag7_companies)
 
+    # Create and display dataframe for Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF
+    combined_tickers = mag7.values() + [mags_etf, leveraged_5x_etf, qqq3_etf]
+    combined_data = {ticker: data for ticker, data in zip(combined_tickers, 
+                                list(mag7_data.values()) + [mags_filtered_data, leveraged_5x_filtered_data, qqq3_filtered_data])}
+    df_combined = create_dataframe(combined_data)
+    if not df_combined.empty:
+        st.dataframe(df_combined)
+    else:
+        st.warning("No combined data available to display.")
+
     # Prepare data for scaled performance plot
-    st.header("Scaled Performance of All Tickers")
+    st.header("Scaled Performance of Selected Tickers")
 
     # Display the selected date range
     st.write(f"**Date Range:** {start_date} to {end_date}")
 
+    # Select tickers for the scaled performance graph: MAGS, MAG7.MI, Weighted Portfolio
     scaled_tickers = {}
-
-    # Include all tickers: Mag 7 companies, MAGS, Leveraged 5x ETF, QQQ3
-    for company, ticker in mag7.items():
-        if not mag7_data[company].empty:
-            scaled_tickers[ticker] = mag7_data[company]
-        else:
-            logging.warning(f"Skipping {company} ({ticker}) for scaled plot due to missing data.")
-
-    # Add ETFs
     if not mags_filtered_data.empty:
         scaled_tickers[mags_etf] = mags_filtered_data
     if not leveraged_5x_filtered_data.empty:
         scaled_tickers[leveraged_5x_etf] = leveraged_5x_filtered_data
-    if not qqq3_filtered_data.empty:
-        scaled_tickers[qqq3_etf] = qqq3_filtered_data
-
-    # Add Weighted Portfolio scaled to 100
     if not weighted_portfolio.empty:
         # Rename the column to 'Adj Close' for consistency in scaling
         scaled_portfolio = weighted_portfolio.rename(columns={'Weighted Portfolio': 'Adj Close'})
@@ -385,9 +416,20 @@ with tabs[0]:
     else:
         st.warning("Weighted Mag 7 Portfolio could not be added to the scaled plot due to missing data.")
 
-    # Plot scaled performance
-    fig_scaled = plot_scaled_tickers(scaled_tickers)
-    st.plotly_chart(fig_scaled)
+    # Plot scaled performance only if there are tickers to plot
+    if scaled_tickers:
+        fig_scaled = plot_selected_scaled_tickers(scaled_tickers)
+        st.plotly_chart(fig_scaled)
+
+        # Create and display dataframe for scaled performance
+        st.subheader("Scaled Dataframe of Selected Tickers")
+        df_scaled = create_dataframe(scaled_tickers)
+        if not df_scaled.empty:
+            st.dataframe(df_scaled)
+        else:
+            st.warning("No scaled data available to display.")
+    else:
+        st.warning("No tickers available to plot scaled performance.")
 
 with tabs[1]:
     st.header("QQQ Comparison")
@@ -444,6 +486,9 @@ with tabs[1]:
         )
 
         st.plotly_chart(fig_qqq)
+
+        # Create and display dataframe for QQQ and qqq3.mi Adjusted Close Prices
+        st.dataframe(create_dataframe({qqq_etf: qqq_filtered_data, qqq3_etf: qqq3_mi_filtered_data}))
 
     # Second Graph: QQQ and qqq3.mi Scaled to 100
     st.subheader("Scaled Performance of QQQ and qqq3.mi (100 at Start)")
@@ -502,3 +547,11 @@ with tabs[1]:
         )
 
         st.plotly_chart(fig_scaled_qqq)
+
+        # Create and display dataframe for scaled QQQ and qqq3.mi
+        st.subheader("Scaled Dataframe of QQQ and qqq3.mi")
+        df_scaled_qqq = create_dataframe(scaled_qqq_tickers)
+        if not df_scaled_qqq.empty:
+            st.dataframe(df_scaled_qqq)
+        else:
+            st.warning("No scaled data available to display.")
