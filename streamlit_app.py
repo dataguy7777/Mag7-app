@@ -355,6 +355,7 @@ with tabs[0]:
         st.plotly_chart(fig_mags)
 
         # Create and display dataframe for MAGS ETF
+        st.subheader(f"Dataframe for {mags_etf} ETF")
         st.dataframe(create_dataframe({mags_etf: mags_filtered_data}))
 
     # Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
@@ -388,11 +389,14 @@ with tabs[0]:
     st.plotly_chart(fig_mag7_companies)
 
     # Create and display dataframe for Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF
-    combined_tickers = mag7.values() + [mags_etf, leveraged_5x_etf, qqq3_etf]
-    combined_data = {ticker: data for ticker, data in zip(combined_tickers, 
-                                list(mag7_data.values()) + [mags_filtered_data, leveraged_5x_filtered_data, qqq3_filtered_data])}
+    combined_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf]
+    combined_data = {ticker: data for ticker, data in zip(
+        combined_tickers, 
+        list(mag7_data.values()) + [mags_filtered_data, leveraged_5x_filtered_data, qqq3_filtered_data]
+    )}
     df_combined = create_dataframe(combined_data)
     if not df_combined.empty:
+        st.subheader("Combined Dataframe of All Tickers")
         st.dataframe(df_combined)
     else:
         st.warning("No combined data available to display.")
@@ -439,8 +443,8 @@ with tabs[1]:
     qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
     qqq_filtered_data = filter_data_by_time_range(qqq_data, etf_start_time, etf_end_time)
 
-    # Fetch QQQ3.MI Leveraged ETF data
-    st.subheader(f"QQQ3.MI Leveraged ETF: {qqq3_etf}")
+    # Fetch qqq3.mi Leveraged ETF data
+    st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, etf_start_time, etf_end_time)
 
@@ -488,6 +492,7 @@ with tabs[1]:
         st.plotly_chart(fig_qqq)
 
         # Create and display dataframe for QQQ and qqq3.mi Adjusted Close Prices
+        st.subheader("Dataframe for QQQ and qqq3.mi Adjusted Close Prices")
         st.dataframe(create_dataframe({qqq_etf: qqq_filtered_data, qqq3_etf: qqq3_mi_filtered_data}))
 
     # Second Graph: QQQ and qqq3.mi Scaled to 100
