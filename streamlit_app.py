@@ -21,12 +21,12 @@ mag7 = {
 }
 
 # Define ETFs
-mags_etf = 'MAGS'              # Ticker for the Mag 7 ETF
-leveraged_5x_etf = 'MAG7.MI'   # Ticker for the Leveraged 5x Mag 7 ETF from Milan Stock Exchange
-qqq3_etf = 'QQQ3.MI'           # Ticker for the QQQ3 Leveraged ETF
+mags_etf = 'MAGS'                # Ticker for the Mag 7 ETF
+leveraged_5x_etf = 'MAG7.MI'     # Ticker for the Leveraged 5x Mag 7 ETF from Milan Stock Exchange
+qqq3_etf = 'qqq3.mi'             # Ticker for the QQQ3 Leveraged ETF
 
 # Define QQQ ETF
-qqq_etf = 'QQQ'                # Standard QQQ ETF
+qqq_etf = 'QQQ'                  # Standard QQQ ETF
 
 # List of all tickers to fetch
 all_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq_etf]
@@ -260,7 +260,7 @@ def plot_scaled_tickers(tickers_data):
 
     return fig
 
-# Streamlit app layout
+# Streamlit app layout with tabs
 st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged ETFs')
 
 # Create tabs
@@ -402,10 +402,10 @@ with tabs[1]:
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, etf_start_time, etf_end_time)
 
-    # First Graph: QQQ and QQQ3.MI Adjusted Close Prices
-    st.subheader("Adjusted Close Prices of QQQ and QQQ3.MI")
+    # First Graph: QQQ and qqq3.mi Adjusted Close Prices
+    st.subheader("Adjusted Close Prices of QQQ and qqq3.mi")
     if (qqq_data is None or qqq_filtered_data.empty) and (qqq3_mi_data is None or qqq3_mi_filtered_data.empty):
-        st.warning("Data for both QQQ and QQQ3.MI could not be fetched.")
+        st.warning("Data for both QQQ and qqq3.mi could not be fetched.")
     else:
         fig_qqq = go.Figure()
         if qqq_data is not None and not qqq_filtered_data.empty:
@@ -423,13 +423,13 @@ with tabs[1]:
                 x=qqq3_mi_filtered_data.index,
                 y=qqq3_mi_filtered_data['Adj Close'],
                 mode='lines',
-                name='QQQ3.MI Leveraged ETF'
+                name='qqq3.mi Leveraged ETF'
             ))
         else:
-            st.warning("QQQ3.MI Leveraged ETF data is not available, skipping in the plot.")
+            st.warning("qqq3.mi Leveraged ETF data is not available, skipping in the plot.")
 
         fig_qqq.update_layout(
-            title="Adjusted Close Prices of QQQ and QQQ3.MI",
+            title="Adjusted Close Prices of QQQ and qqq3.mi",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
@@ -445,8 +445,8 @@ with tabs[1]:
 
         st.plotly_chart(fig_qqq)
 
-    # Second Graph: QQQ and QQQ3.MI Scaled to 100
-    st.subheader("Scaled Performance of QQQ and QQQ3.MI (100 at Start)")
+    # Second Graph: QQQ and qqq3.mi Scaled to 100
+    st.subheader("Scaled Performance of QQQ and qqq3.mi (100 at Start)")
 
     # Prepare data for scaled performance plot
     scaled_qqq_tickers = {}
@@ -462,7 +462,7 @@ with tabs[1]:
         logging.warning(f"Skipping {qqq3_etf} for scaled plot due to missing data.")
 
     if not scaled_qqq_tickers:
-        st.warning("No data available to plot scaled performance for QQQ and QQQ3.MI.")
+        st.warning("No data available to plot scaled performance for QQQ and qqq3.mi.")
     else:
         fig_scaled_qqq = go.Figure()
 
@@ -487,7 +487,7 @@ with tabs[1]:
                 st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
 
         fig_scaled_qqq.update_layout(
-            title="Scaled Performance of QQQ and QQQ3.MI (100 at Start)",
+            title="Scaled Performance of QQQ and qqq3.mi (100 at Start)",
             xaxis_title='Date',
             yaxis_title='Scaled Adjusted Close Price',
             hovermode='x unified',
