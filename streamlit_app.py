@@ -22,7 +22,7 @@ mag7 = {
 
 # Define ETFs
 mags_etf = 'MAGS'  # Ticker for the Mag 7 ETF
-leveraged_5x_etf = 'XS2779861249'  # Ticker for the leveraged 5x Mag 7 ETF
+leveraged_5x_etf = 'MAG7.MI'  # Ticker for the leveraged 5x Mag 7 ETF from Milan Stock Exchange
 qqq3_etf = 'QQQ3'  # Ticker for the QQQ3 Leveraged ETF
 
 # List of all tickers to fetch
@@ -103,7 +103,7 @@ def calculate_weighted_portfolio(mag7_data):
             portfolio[company] = data['Adj Close'] * weights
         else:
             logging.warning(f"Skipping {company} due to no data.")
-    
+
     if not portfolio.empty:
         portfolio['Weighted Portfolio'] = portfolio.sum(axis=1)
         return portfolio[['Weighted Portfolio']]
