@@ -33,6 +33,25 @@ qqq_etf = 'QQQ'                  # Standard QQQ ETF
 # List of all tickers to fetch
 all_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq5_etf, qqq_etf]
 
+# Function to convert DataFrame to Excel
+def to_excel(df):
+    """Convert a DataFrame to an Excel file in memory."""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Make a copy to avoid modifying the original DataFrame
+        df_to_export = df.copy()
+        
+        # Remove timezone information from the index if present
+        if isinstance(df_to_export.index, pd.DatetimeIndex) and df_to_export.index.tz is not None:
+            logging.info("Removing timezone information from datetime index")
+            df_to_export.index = df_to_export.index.tz_convert(None)
+        
+        df_to_export.to_excel(writer, index=True, sheet_name='Sheet1')
+        writer.save()
+    processed_data = output.getvalue()
+    logging.info("Dataframe exported to Excel successfully")
+    return processed_data
+
 # Caching the fetch_stock_data function to prevent repeated data fetching
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
@@ -58,6 +77,7 @@ def filter_data_by_time_range(data, start_time, end_time):
     Filter data for a specific time range after converting to CEST timezone.
     """
     if data is None or data.empty:
+        logging.warning("No data to filter")
         return pd.DataFrame()  # Return empty dataframe if no data is present
 
     cest = pytz.timezone('Europe/Berlin')
@@ -65,6 +85,7 @@ def filter_data_by_time_range(data, start_time, end_time):
     # Check if the index is already localized
     if data.index.tz is None:
         try:
+            logging.info("Localizing data index to UTC and converting to CEST")
             data.index = data.index.tz_localize('UTC').tz_convert(cest)
         except Exception as e:
             logging.error(f"Error localizing timezone for data: {e}")
@@ -72,7 +93,7 @@ def filter_data_by_time_range(data, start_time, end_time):
 
     # Filter by the given time range
     data_filtered = data.between_time(start_time.strftime('%H:%M'), end_time.strftime('%H:%M'))
-    logging.info(f"Filtered data from {start_time} to {end_time}")
+    logging.info(f"Filtered data between {start_time} and {end_time}")
     return data_filtered
 
 # Caching the calculate_weighted_portfolio function
@@ -81,6 +102,7 @@ def calculate_weighted_portfolio(mag7_data):
     """
     Calculate the weighted portfolio where each company has a weight of 1/7.
     """
+    logging.info("Calculating weighted portfolio")
     # Assign equal weights (1/7) to each company
     weights = 1 / len(mag7_data)
 
@@ -100,12 +122,13 @@ def calculate_weighted_portfolio(mag7_data):
         logging.error("No data available to calculate weighted portfolio.")
         return pd.DataFrame()
 
-# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, Leveraged ETFs, and QQQ3
-def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data, qqq5_data):
+# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, Leveraged ETFs, QQQ3, and QQQ5
+def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data, qqq5_data, proxy_leveraged_portfolio):
     """
-    Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF.
+    Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF,
+    Leveraged 5x ETF, QQQ3 Leveraged ETF, QQQ5 Leveraged ETF, and Proxy 5x Leveraged Portfolio.
     """
-    logging.info("Plotting Mag 7 companies with leveraged ETFs")
+    logging.info("Plotting Mag 7 companies with leveraged ETFs and proxy")
     fig = go.Figure()
 
     # Plot Mag 7 companies
@@ -120,6 +143,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
             logging.info(f"Plotted {company}")
         else:
             st.warning(f"No data available for {company}, skipping in the plot.")
+            logging.warning(f"No data available for {company}")
 
     # Plot Weighted Portfolio
     if not weighted_portfolio.empty:
@@ -133,6 +157,21 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         logging.info("Plotted Weighted Mag 7 Portfolio")
     else:
         st.warning("Weighted Mag 7 Portfolio could not be calculated due to missing data.")
+        logging.warning("Weighted Mag 7 Portfolio missing")
+
+    # Plot Proxy 5x Leveraged Portfolio
+    if not proxy_leveraged_portfolio.empty:
+        fig.add_trace(go.Scatter(
+            x=proxy_leveraged_portfolio.index,
+            y=proxy_leveraged_portfolio['Weighted Portfolio 5x'],
+            mode='lines',
+            name='Proxy 5x Weighted Portfolio',
+            line=dict(dash='dot', color='green')
+        ))
+        logging.info("Plotted Proxy 5x Weighted Portfolio")
+    else:
+        st.warning("Proxy 5x Weighted Portfolio could not be plotted due to missing data.")
+        logging.warning("Proxy 5x Weighted Portfolio missing")
 
     # Plot MAGS ETF
     if not mags_filtered_data.empty:
@@ -146,6 +185,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         logging.info("Plotted MAGS ETF")
     else:
         st.warning("MAGS ETF data is not available, skipping in the plot.")
+        logging.warning("MAGS ETF data missing")
 
     # Plot Leveraged 5x ETF
     if not leveraged_5x_data.empty:
@@ -159,6 +199,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         logging.info("Plotted Leveraged 5x Mag 7 ETF")
     else:
         st.warning("Leveraged 5x Mag 7 ETF data is not available, skipping in the plot.")
+        logging.warning("Leveraged 5x Mag 7 ETF data missing")
 
     # Plot QQQ3 Leveraged ETF
     if not qqq3_data.empty:
@@ -172,6 +213,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         logging.info("Plotted QQQ3 Leveraged ETF")
     else:
         st.warning("QQQ3 Leveraged ETF data is not available, skipping in the plot.")
+        logging.warning("QQQ3 Leveraged ETF data missing")
 
     # Plot QQQ5 Leveraged ETF
     if not qqq5_data.empty:
@@ -180,15 +222,16 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
             y=qqq5_data['Adj Close'],
             mode='lines',
             name='QQQ5 Leveraged ETF',
-            line=dict(dash='dotdash')
+            line=dict(dash='solid', color='black')
         ))
         logging.info("Plotted QQQ5 Leveraged ETF")
     else:
         st.warning("QQQ5 Leveraged ETF data is not available, skipping in the plot.")
+        logging.warning("QQQ5 Leveraged ETF data missing")
 
     # Update layout
     fig.update_layout(
-        title="Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged ETFs, and QQQ3/QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)",
+        title="Mag 7 Companies, Weighted Portfolio, Proxy 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)",
         xaxis_title='Date',
         yaxis_title='Adjusted Close Price',
         hovermode='x unified',
@@ -202,7 +245,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
     )
 
-    logging.info("Completed plotting Mag 7 companies with leveraged ETFs")
+    logging.info("Finished plotting Mag 7 and ETFs")
     return fig
 
 # Plot selected tickers scaled to 100
@@ -228,11 +271,13 @@ def plot_selected_scaled_tickers(tickers_data):
                     mode='lines',
                     name=ticker
                 ))
-                logging.info(f"Scaled and plotted {ticker}")
+                logging.info(f"Plotted scaled data for {ticker}")
             else:
                 st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
+                logging.warning(f"No valid adjusted close prices for {ticker}")
         else:
             st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
+            logging.warning(f"No data available for {ticker}")
 
     # Update layout
     fig.update_layout(
@@ -250,7 +295,7 @@ def plot_selected_scaled_tickers(tickers_data):
         xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
     )
 
-    logging.info("Completed plotting scaled performance of selected tickers")
+    logging.info("Finished plotting scaled tickers")
     return fig
 
 # Plot percentage changes as bar charts
@@ -274,7 +319,7 @@ def plot_percentage_bar_charts(tickers_data):
                 opacity=0.6
             ))
             logging.info(f"Added bar chart for {ticker}")
-    
+
     fig.update_layout(
         title="Percentage Changes Every 30 Minutes",
         xaxis_title='Date',
@@ -291,7 +336,7 @@ def plot_percentage_bar_charts(tickers_data):
         xaxis_rangeslider_visible=False
     )
 
-    logging.info("Completed plotting percentage changes as bar charts")
+    logging.info("Finished plotting bar charts")
     return fig
 
 # Plot percentage changes as histograms
@@ -330,7 +375,7 @@ def plot_percentage_histograms(tickers_data):
         )
     )
 
-    logging.info("Completed plotting percentage changes as histograms")
+    logging.info("Finished plotting histograms")
     return fig
 
 # Function to create dataframe with values and percentage changes
@@ -338,9 +383,8 @@ def create_dataframe(tickers_data):
     """
     Create a dataframe showing Adjusted Close Prices and % Change for each ticker.
     """
-    logging.info("Creating dataframe with values and percentage changes")
     if not tickers_data:
-        logging.warning("No tickers provided to create dataframe")
+        logging.warning("No tickers data provided to create dataframe")
         return pd.DataFrame()
 
     combined_df = pd.DataFrame()
@@ -353,7 +397,7 @@ def create_dataframe(tickers_data):
             combined_df = combined_df.join(df, how='outer') if not combined_df.empty else df
             logging.info(f"Added data for {ticker} to dataframe")
         else:
-            logging.warning(f"Skipping {ticker} for dataframe due to missing data")
+            logging.warning(f"Skipping {ticker} for dataframe due to missing data.")
 
     # Drop the first row if it contains NaN due to pct_change
     combined_df.dropna(inplace=True)
@@ -369,20 +413,8 @@ def create_dataframe(tickers_data):
     # Reorder columns: all Value columns first, then % Change columns
     combined_df = combined_df[value_columns + pct_columns]
 
-    logging.info("Completed creating dataframe")
+    logging.info("Created combined dataframe with values and percentage changes")
     return combined_df
-
-# Function to convert dataframe to Excel bytes
-def to_excel(df):
-    """
-    Convert a pandas dataframe to Excel bytes.
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=True, sheet_name='Sheet1')
-        writer.save()
-    processed_data = output.getvalue()
-    return processed_data
 
 # Streamlit app layout with tabs
 st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged ETFs')
@@ -416,26 +448,31 @@ with tabs[0]:
     st.header(f"Comparing with MAGS ETF: {mags_etf}")
     mags_data = fetch_stock_data(mags_etf, start_date, end_date)
     mags_filtered_data = filter_data_by_time_range(mags_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered MAGS ETF data")
 
     # Fetch Leveraged 5x ETF data
     st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
     leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
     leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered Leveraged 5x ETF data")
 
     # Fetch QQQ3 Leveraged ETF data
     st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
     qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_filtered_data = filter_data_by_time_range(qqq3_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered QQQ3 Leveraged ETF data")
 
     # Fetch QQQ5 Leveraged ETF data
     st.header(f"QQQ5 Leveraged ETF: {qqq5_etf}")
     qqq5_data = fetch_stock_data(qqq5_etf, start_date, end_date)
     qqq5_filtered_data = filter_data_by_time_range(qqq5_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered QQQ5 Leveraged ETF data")
 
     # Plot MAGS ETF data
     st.subheader(f"{mags_etf} ETF (9:00 to 17:30 CEST)")
     if mags_data is None or mags_filtered_data.empty:
         st.warning(f"Data for {mags_etf} ETF could not be fetched.")
+        logging.warning(f"No data for {mags_etf} ETF")
     else:
         fig_mags = go.Figure()
         fig_mags.add_trace(go.Scatter(
@@ -452,56 +489,69 @@ with tabs[0]:
             xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
         )
         st.plotly_chart(fig_mags)
+        logging.info("Displayed MAGS ETF plot")
 
         # Create and display dataframe for MAGS ETF
         st.subheader(f"Dataframe for {mags_etf} ETF")
         df_mags = create_dataframe({mags_etf: mags_filtered_data})
         st.dataframe(df_mags)
+        logging.info("Displayed MAGS ETF dataframe")
 
-        # Export to Excel button
+        # Export to Excel button for MAGS ETF
         if not df_mags.empty:
             excel_mags = to_excel(df_mags)
             st.download_button(
                 label="Export MAGS ETF Data to Excel",
                 data=excel_mags,
-                file_name="MAGS_ETF_Data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name='MAGS_ETF_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            logging.info("Added Export button for MAGS ETF Data")
-        else:
-            st.warning("No data available to export for MAGS ETF.")
+            logging.info("Added Export button for MAGS ETF dataframe")
 
     # Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
     st.header("Mag 7 Company Performance (15:30 to 22:00 CEST)")
     mag7_data = {}
 
     for company, ticker in mag7.items():
-        logging.info(f"Fetching data for {company} ({ticker})")
+        logging.info(f"Processing data for {company} ({ticker})")
         data = fetch_stock_data(ticker, start_date, end_date)
         if data is None:
             st.error(f"Failed to fetch data for {company} ({ticker}).")
+            logging.error(f"Failed to fetch data for {company} ({ticker})")
             mag7_data[company] = pd.DataFrame()  # Assign empty DataFrame
         else:
             filtered_data = filter_data_by_time_range(data, company_start_time, company_end_time)
             if filtered_data.empty:
                 st.warning(f"No data available for {company} ({ticker}) in the specified time range.")
+                logging.warning(f"No data for {company} ({ticker}) in specified time range")
             mag7_data[company] = filtered_data
-            logging.info(f"Data fetched and filtered for {company} ({ticker})")
+            logging.info(f"Processed data for {company} ({ticker})")
 
     # Calculate the weighted portfolio for the Mag 7 companies
     weighted_portfolio = calculate_weighted_portfolio(mag7_data)
 
+    # Create Proxy for 5x Leveraged Portfolio
+    if not weighted_portfolio.empty:
+        proxy_leveraged_portfolio = weighted_portfolio.copy()
+        proxy_leveraged_portfolio['Weighted Portfolio 5x'] = proxy_leveraged_portfolio['Weighted Portfolio'] * 5
+        logging.info("Created Proxy for 5x Leveraged Portfolio")
+    else:
+        proxy_leveraged_portfolio = pd.DataFrame()
+        logging.warning("Weighted Mag 7 Portfolio missing; cannot create proxy")
+
     # Plot all Mag 7 companies, weighted portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
-    st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged ETFs, and QQQ3/QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)")
+    st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)")
     fig_mag7_companies = plot_mag7_with_leveraged_etf(
         mag7_data,
         weighted_portfolio,
         mags_filtered_data,
         leveraged_5x_filtered_data,
         qqq3_filtered_data,
-        qqq5_filtered_data
+        qqq5_filtered_data,
+        proxy_leveraged_portfolio
     )
     st.plotly_chart(fig_mag7_companies)
+    logging.info("Displayed Mag 7 companies and ETFs plot")
 
     # Create and display dataframe for Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
     combined_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq5_etf]
@@ -513,24 +563,27 @@ with tabs[0]:
     if not df_combined.empty:
         st.subheader("Combined Dataframe of All Tickers")
         st.dataframe(df_combined)
+        logging.info("Displayed combined dataframe of all tickers")
 
-        # Export to Excel button
+        # Export to Excel button for combined dataframe
         excel_combined = to_excel(df_combined)
         st.download_button(
-            label="Export Combined Tickers Data to Excel",
+            label="Export Combined Data to Excel",
             data=excel_combined,
-            file_name="Combined_Tickers_Data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_name='Combined_Mag7_ETFs_Data.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        logging.info("Added Export button for Combined Tickers Data")
+        logging.info("Added Export button for combined dataframe")
     else:
         st.warning("No combined data available to display.")
+        logging.warning("Combined dataframe is empty")
 
     # Prepare data for scaled performance plot
     st.header("Scaled Performance of Selected Tickers")
 
     # Display the selected date range
     st.write(f"**Date Range:** {start_date} to {end_date}")
+    logging.info(f"Displaying scaled performance from {start_date} to {end_date}")
 
     # Select tickers for the scaled performance graph: MAGS, MAG7.MI, Weighted Portfolio
     scaled_tickers = {}
@@ -544,58 +597,48 @@ with tabs[0]:
         scaled_tickers['Weighted Mag 7 Portfolio'] = scaled_portfolio
     else:
         st.warning("Weighted Mag 7 Portfolio could not be added to the scaled plot due to missing data.")
+        logging.warning("Weighted Mag 7 Portfolio missing for scaled plot")
 
     # Plot scaled performance only if there are tickers to plot
     if scaled_tickers:
         fig_scaled = plot_selected_scaled_tickers(scaled_tickers)
         st.plotly_chart(fig_scaled)
+        logging.info("Displayed scaled performance plot")
 
         # Create and display dataframe for scaled performance
         st.subheader("Scaled Dataframe of Selected Tickers")
         df_scaled = create_dataframe(scaled_tickers)
         if not df_scaled.empty:
             st.dataframe(df_scaled)
-
-            # Export to Excel button
+            logging.info("Displayed scaled dataframe")
+            
+            # Export to Excel button for scaled dataframe
             excel_scaled = to_excel(df_scaled)
             st.download_button(
-                label="Export Scaled Tickers Data to Excel",
+                label="Export Scaled Data to Excel",
                 data=excel_scaled,
-                file_name="Scaled_Tickers_Data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name='Scaled_Selected_Tickers_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            logging.info("Added Export button for Scaled Tickers Data")
+            logging.info("Added Export button for scaled dataframe")
         else:
             st.warning("No scaled data available to display.")
+            logging.warning("Scaled dataframe is empty")
 
         # Plot Percentage Changes as Bar Charts
         st.subheader("Percentage Changes Every 30 Minutes (Bar Chart)")
         fig_bar = plot_percentage_bar_charts(scaled_tickers)
         st.plotly_chart(fig_bar)
+        logging.info("Displayed percentage changes bar chart")
 
-        # Export bar charts data
-        for ticker, data in scaled_tickers.items():
-            if not data.empty:
-                pct_change = data['Adj Close'].pct_change() * 100
-                pct_change = pct_change.dropna()
-                df_pct = pd.DataFrame({f'{ticker} % Change': pct_change})
-                df_pct = df_pct.reset_index()
-                df_pct.rename(columns={'index': 'Datetime'}, inplace=True)
-                excel_pct = to_excel(df_pct)
-                st.download_button(
-                    label=f"Export {ticker} Percentage Changes to Excel",
-                    data=excel_pct,
-                    file_name=f"{ticker}_Percentage_Changes.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                logging.info(f"Added Export button for {ticker} Percentage Changes")
-        
         # Plot Percentage Changes as Histograms
         st.subheader("Distribution of Percentage Changes (Histogram)")
         fig_hist = plot_percentage_histograms(scaled_tickers)
         st.plotly_chart(fig_hist)
+        logging.info("Displayed percentage changes histogram")
     else:
         st.warning("No tickers available to plot scaled performance.")
+        logging.warning("No tickers available for scaled performance")
 
 with tabs[1]:
     st.header("QQQ Comparison")
@@ -604,23 +647,27 @@ with tabs[1]:
     st.subheader(f"QQQ ETF: {qqq_etf}")
     qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
     qqq_filtered_data = filter_data_by_time_range(qqq_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered QQQ ETF data")
 
     # Fetch qqq3.mi Leveraged ETF data
     st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered qqq3.mi Leveraged ETF data")
 
     # Fetch qqq5.l Leveraged ETF data
     st.subheader(f"qqq5.l Leveraged ETF: {qqq5_etf}")
     qqq5_l_data = fetch_stock_data(qqq5_etf, start_date, end_date)
     qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data, etf_start_time, etf_end_time)
+    logging.info("Fetched and filtered qqq5.l Leveraged ETF data")
 
     # First Graph: QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
     st.subheader("Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l")
     if (qqq_data is None or qqq_filtered_data.empty) and \
        (qqq3_mi_data is None or qqq3_mi_filtered_data.empty) and \
        (qqq5_l_data is None or qqq5_l_filtered_data.empty):
-        st.warning("Data for all QQQ ETFs could not be fetched.")
+        st.warning("Data for QQQ, qqq3.mi, and qqq5.l could not be fetched.")
+        logging.warning("No data fetched for QQQ, qqq3.mi, and qqq5.l")
     else:
         fig_qqq = go.Figure()
         if qqq_data is not None and not qqq_filtered_data.empty:
@@ -633,6 +680,7 @@ with tabs[1]:
             logging.info("Plotted QQQ ETF")
         else:
             st.warning("QQQ ETF data is not available, skipping in the plot.")
+            logging.warning("QQQ ETF data missing")
 
         if qqq3_mi_data is not None and not qqq3_mi_filtered_data.empty:
             fig_qqq.add_trace(go.Scatter(
@@ -644,6 +692,7 @@ with tabs[1]:
             logging.info("Plotted qqq3.mi Leveraged ETF")
         else:
             st.warning("qqq3.mi Leveraged ETF data is not available, skipping in the plot.")
+            logging.warning("qqq3.mi Leveraged ETF data missing")
 
         if qqq5_l_data is not None and not qqq5_l_filtered_data.empty:
             fig_qqq.add_trace(go.Scatter(
@@ -651,11 +700,12 @@ with tabs[1]:
                 y=qqq5_l_filtered_data['Adj Close'],
                 mode='lines',
                 name='qqq5.l Leveraged ETF',
-                line=dict(dash='dashdot')
+                line=dict(color='purple')
             ))
             logging.info("Plotted qqq5.l Leveraged ETF")
         else:
             st.warning("qqq5.l Leveraged ETF data is not available, skipping in the plot.")
+            logging.warning("qqq5.l Leveraged ETF data missing")
 
         fig_qqq.update_layout(
             title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l",
@@ -673,88 +723,25 @@ with tabs[1]:
         )
 
         st.plotly_chart(fig_qqq)
+        logging.info("Displayed QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices plot")
 
         # Create and display dataframe for QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
-        st.subheader("Dataframe for QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices")
         df_qqq = create_dataframe({
             qqq_etf: qqq_filtered_data,
             qqq3_etf: qqq3_mi_filtered_data,
             qqq5_etf: qqq5_l_filtered_data
         })
+        st.subheader("Dataframe for QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices")
         st.dataframe(df_qqq)
+        logging.info("Displayed dataframe for QQQ, qqq3.mi, and qqq5.l")
 
-        # Export to Excel button
+        # Export to Excel button for QQQ, qqq3.mi, and qqq5.l dataframe
         if not df_qqq.empty:
             excel_qqq = to_excel(df_qqq)
             st.download_button(
-                label="Export QQQ ETFs Data to Excel",
+                label="Export QQQ, qqq3.mi, and qqq5.l Data to Excel",
                 data=excel_qqq,
-                file_name="QQQ_ETFs_Data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name='QQQ_Leveraged_ETFs_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            logging.info("Added Export button for QQQ ETFs Data")
-        else:
-            st.warning("No data available to export for QQQ ETFs.")
-
-    # Second Graph: QQQ, qqq3.mi, and qqq5.l Scaled to 100
-    st.subheader("Scaled Performance of QQQ, qqq3.mi, and qqq5.l (100 at Start)")
-
-    # Prepare data for scaled performance plot
-    scaled_qqq_tickers = {}
-    if qqq_data is not None and not qqq_filtered_data.empty:
-        scaled_qqq_tickers[qqq_etf] = qqq_filtered_data
-    if qqq3_mi_data is not None and not qqq3_mi_filtered_data.empty:
-        scaled_qqq_tickers[qqq3_etf] = qqq3_mi_filtered_data
-    if qqq5_l_data is not None and not qqq5_l_filtered_data.empty:
-        scaled_qqq_tickers[qqq5_etf] = qqq5_l_filtered_data
-
-    if scaled_qqq_tickers:
-        fig_scaled_qqq = plot_selected_scaled_tickers(scaled_qqq_tickers)
-        st.plotly_chart(fig_scaled_qqq)
-
-        # Create and display dataframe for scaled QQQ, qqq3.mi, and qqq5.l
-        st.subheader("Scaled Dataframe of QQQ, qqq3.mi, and qqq5.l")
-        df_scaled_qqq = create_dataframe(scaled_qqq_tickers)
-        if not df_scaled_qqq.empty:
-            st.dataframe(df_scaled_qqq)
-
-            # Export to Excel button
-            excel_scaled_qqq = to_excel(df_scaled_qqq)
-            st.download_button(
-                label="Export Scaled QQQ ETFs Data to Excel",
-                data=excel_scaled_qqq,
-                file_name="Scaled_QQQ_ETFs_Data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            logging.info("Added Export button for Scaled QQQ ETFs Data")
-        else:
-            st.warning("No scaled data available to display for QQQ ETFs.")
-
-        # Plot Percentage Changes as Bar Charts
-        st.subheader("Percentage Changes Every 30 Minutes (Bar Chart)")
-        fig_bar_qqq = plot_percentage_bar_charts(scaled_qqq_tickers)
-        st.plotly_chart(fig_bar_qqq)
-
-        # Export bar charts data
-        for ticker, data in scaled_qqq_tickers.items():
-            if not data.empty:
-                pct_change = data['Adj Close'].pct_change() * 100
-                pct_change = pct_change.dropna()
-                df_pct = pd.DataFrame({f'{ticker} % Change': pct_change})
-                df_pct = df_pct.reset_index()
-                df_pct.rename(columns={'index': 'Datetime'}, inplace=True)
-                excel_pct = to_excel(df_pct)
-                st.download_button(
-                    label=f"Export {ticker} Percentage Changes to Excel",
-                    data=excel_pct,
-                    file_name=f"{ticker}_Percentage_Changes.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                logging.info(f"Added Export button for {ticker} Percentage Changes")
-    
-        # Plot Percentage Changes as Histograms
-        st.subheader("Distribution of Percentage Changes (Histogram)")
-        fig_hist_qqq = plot_percentage_histograms(scaled_qqq_tickers)
-        st.plotly_chart(fig_hist_qqq)
-    else:
-        st.warning("No data available to plot scaled performance for QQQ ETFs.")
+            logging.info("Added Export button for QQQ, qqq3.mi, and qqq5.l dataframe")
