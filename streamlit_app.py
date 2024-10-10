@@ -31,19 +31,11 @@ qqq_etf = 'QQQ'                  # Standard QQQ ETF
 # List of all tickers to fetch
 all_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq_etf]
 
-# Function to fetch data from Yahoo Finance
+# Caching the fetch_stock_data function to prevent repeated data fetching
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
     """
     Fetch historical stock data for the given ticker.
-
-    Args:
-        ticker (str): Stock ticker symbol (e.g., AAPL for Apple).
-        start_date (datetime.date): Start date for data fetching.
-        end_date (datetime.date): End date for data fetching.
-        interval (str): Time interval for data (default is '30m').
-
-    Returns:
-        pd.DataFrame or None: Dataframe containing stock data, or None if fetch fails.
     """
     try:
         data = yf.download(ticker, start=start_date, end=end_date, interval=interval, progress=False)
@@ -56,18 +48,11 @@ def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
         logging.error(f"Error fetching data for {ticker}: {e}")
         return None
 
-# Convert to CEST and filter data for the specified time range
+# Caching the filter_data_by_time_range function
+@st.cache_data(show_spinner=False)
 def filter_data_by_time_range(data, start_time, end_time):
     """
     Filter data for a specific time range after converting to CEST timezone.
-
-    Args:
-        data (pd.DataFrame): The input stock data.
-        start_time (datetime.time): Start time (e.g., 09:00).
-        end_time (datetime.time): End time (e.g., 17:30).
-
-    Returns:
-        pd.DataFrame: Filtered dataframe, or empty dataframe if input is None or empty.
     """
     if data is None or data.empty:
         return pd.DataFrame()  # Return empty dataframe if no data is present
@@ -86,16 +71,11 @@ def filter_data_by_time_range(data, start_time, end_time):
     data_filtered = data.between_time(start_time.strftime('%H:%M'), end_time.strftime('%H:%M'))
     return data_filtered
 
-# Create a weighted portfolio of Mag 7 companies
+# Caching the calculate_weighted_portfolio function
+@st.cache_data(show_spinner=False)
 def calculate_weighted_portfolio(mag7_data):
     """
     Calculate the weighted portfolio where each company has a weight of 1/7.
-
-    Args:
-        mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
-
-    Returns:
-        pd.DataFrame: Weighted portfolio of Mag 7 companies.
     """
     # Assign equal weights (1/7) to each company
     weights = 1 / len(mag7_data)
@@ -118,16 +98,6 @@ def calculate_weighted_portfolio(mag7_data):
 def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data):
     """
     Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF.
-
-    Args:
-        mag7_data (dict): Dictionary containing stock data for each Mag 7 company.
-        weighted_portfolio (pd.DataFrame): DataFrame of the weighted portfolio.
-        mags_filtered_data (pd.DataFrame): DataFrame of MAGS ETF data.
-        leveraged_5x_data (pd.DataFrame): DataFrame of Leveraged 5x ETF data.
-        qqq3_data (pd.DataFrame): DataFrame of QQQ3 Leveraged ETF data.
-
-    Returns:
-        Plotly figure: A line chart with all Mag 7 companies, the weighted portfolio, MAGS ETF, Leveraged 5x ETF, and QQQ3 Leveraged ETF.
     """
     fig = go.Figure()
 
@@ -213,12 +183,6 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 def plot_selected_scaled_tickers(tickers_data):
     """
     Plot selected tickers scaled to 100 at the beginning of the time series.
-
-    Args:
-        tickers_data (dict): Dictionary containing stock data for each ticker.
-
-    Returns:
-        Plotly figure: A line chart with selected tickers scaled to 100.
     """
     fig = go.Figure()
 
@@ -264,12 +228,6 @@ def plot_selected_scaled_tickers(tickers_data):
 def plot_percentage_bar_charts(tickers_data):
     """
     Plot bar charts showing % changes for each ticker over time.
-
-    Args:
-        tickers_data (dict): Dictionary containing stock data for each ticker.
-
-    Returns:
-        Plotly figure: A bar chart with % changes.
     """
     fig = go.Figure()
 
@@ -308,12 +266,6 @@ def plot_percentage_bar_charts(tickers_data):
 def plot_percentage_histograms(tickers_data):
     """
     Plot histograms showing the distribution of % changes for each ticker.
-
-    Args:
-        tickers_data (dict): Dictionary containing stock data for each ticker.
-
-    Returns:
-        Plotly figure: A histogram showing % change distributions.
     """
     fig = go.Figure()
 
@@ -350,12 +302,6 @@ def plot_percentage_histograms(tickers_data):
 def create_dataframe(tickers_data):
     """
     Create a dataframe showing Adjusted Close Prices and % Change for each ticker.
-
-    Args:
-        tickers_data (dict): Dictionary containing stock data for each ticker.
-
-    Returns:
-        pd.DataFrame: Dataframe with Time as rows and columns for each ticker's Value and % Change.
     """
     if not tickers_data:
         return pd.DataFrame()
