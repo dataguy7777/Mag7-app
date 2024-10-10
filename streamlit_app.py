@@ -260,6 +260,92 @@ def plot_selected_scaled_tickers(tickers_data):
 
     return fig
 
+# Plot percentage changes as bar charts
+def plot_percentage_bar_charts(tickers_data):
+    """
+    Plot bar charts showing % changes for each ticker over time.
+
+    Args:
+        tickers_data (dict): Dictionary containing stock data for each ticker.
+
+    Returns:
+        Plotly figure: A bar chart with % changes.
+    """
+    fig = go.Figure()
+
+    for ticker, data in tickers_data.items():
+        if not data.empty:
+            # Calculate % change
+            pct_change = data['Adj Close'].pct_change() * 100
+            # Drop the first NaN
+            pct_change = pct_change.dropna()
+            fig.add_trace(go.Bar(
+                x=pct_change.index,
+                y=pct_change.values,
+                name=f'{ticker} % Change',
+                opacity=0.6
+            ))
+
+    fig.update_layout(
+        title="Percentage Changes Every 30 Minutes",
+        xaxis_title='Date',
+        yaxis_title='Percentage Change (%)',
+        hovermode='x unified',
+        barmode='overlay',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        ),
+        xaxis_rangeslider_visible=False
+    )
+
+    return fig
+
+# Plot percentage changes as histograms
+def plot_percentage_histograms(tickers_data):
+    """
+    Plot histograms showing the distribution of % changes for each ticker.
+
+    Args:
+        tickers_data (dict): Dictionary containing stock data for each ticker.
+
+    Returns:
+        Plotly figure: A histogram showing % change distributions.
+    """
+    fig = go.Figure()
+
+    for ticker, data in tickers_data.items():
+        if not data.empty:
+            # Calculate % change
+            pct_change = data['Adj Close'].pct_change() * 100
+            # Drop the first NaN
+            pct_change = pct_change.dropna()
+            fig.add_trace(go.Histogram(
+                x=pct_change.values,
+                name=f'{ticker} % Change',
+                opacity=0.6
+            ))
+
+    fig.update_layout(
+        title="Distribution of Percentage Changes",
+        xaxis_title='Percentage Change (%)',
+        yaxis_title='Count',
+        hovermode='x unified',
+        barmode='overlay',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        )
+    )
+
+    return fig
+
 # Function to create dataframe with values and percentage changes
 def create_dataframe(tickers_data):
     """
@@ -269,7 +355,7 @@ def create_dataframe(tickers_data):
         tickers_data (dict): Dictionary containing stock data for each ticker.
 
     Returns:
-        pd.DataFrame: Dataframe with Time as rows and MultiIndex columns (Value, % Change) for each ticker.
+        pd.DataFrame: Dataframe with Time as rows and columns for each ticker's Value and % Change.
     """
     if not tickers_data:
         return pd.DataFrame()
@@ -287,6 +373,17 @@ def create_dataframe(tickers_data):
 
     # Drop the first row if it contains NaN due to pct_change
     combined_df.dropna(inplace=True)
+
+    # Format % Change columns
+    value_columns = [col for col in combined_df.columns if 'Value' in col]
+    pct_columns = [col for col in combined_df.columns if '% Change' in col]
+
+    # Format % Change columns to 2 decimals with %
+    for pct_col in pct_columns:
+        combined_df[pct_col] = combined_df[pct_col].map("{:.2f}%".format)
+
+    # Reorder columns: all Value columns first, then % Change columns
+    combined_df = combined_df[value_columns + pct_columns]
 
     return combined_df
 
@@ -432,6 +529,16 @@ with tabs[0]:
             st.dataframe(df_scaled)
         else:
             st.warning("No scaled data available to display.")
+
+        # Plot Percentage Changes as Bar Charts
+        st.subheader("Percentage Changes Every 30 Minutes (Bar Chart)")
+        fig_bar = plot_percentage_bar_charts(scaled_tickers)
+        st.plotly_chart(fig_bar)
+
+        # Plot Percentage Changes as Histograms
+        st.subheader("Distribution of Percentage Changes (Histogram)")
+        fig_hist = plot_percentage_histograms(scaled_tickers)
+        st.plotly_chart(fig_hist)
     else:
         st.warning("No tickers available to plot scaled performance.")
 
@@ -514,43 +621,7 @@ with tabs[1]:
     if not scaled_qqq_tickers:
         st.warning("No data available to plot scaled performance for QQQ and qqq3.mi.")
     else:
-        fig_scaled_qqq = go.Figure()
-
-        for ticker, data in scaled_qqq_tickers.items():
-            if not data.empty:
-                # Ensure data is sorted by date
-                data = data.sort_index()
-                # Find the first non-NaN value for scaling
-                first_valid_index = data['Adj Close'].first_valid_index()
-                if first_valid_index is not None:
-                    first_price = data.loc[first_valid_index, 'Adj Close']
-                    scaled_prices = (data['Adj Close'] / first_price) * 100
-                    fig_scaled_qqq.add_trace(go.Scatter(
-                        x=data.index,
-                        y=scaled_prices,
-                        mode='lines',
-                        name=ticker
-                    ))
-                else:
-                    st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
-            else:
-                st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
-
-        fig_scaled_qqq.update_layout(
-            title="Scaled Performance of QQQ and qqq3.mi (100 at Start)",
-            xaxis_title='Date',
-            yaxis_title='Scaled Adjusted Close Price',
-            hovermode='x unified',
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=-0.3,
-                xanchor="center",
-                x=0.5
-            ),
-            xaxis_rangeslider_visible=False
-        )
-
+        fig_scaled_qqq = plot_selected_scaled_tickers(scaled_qqq_tickers)
         st.plotly_chart(fig_scaled_qqq)
 
         # Create and display dataframe for scaled QQQ and qqq3.mi
@@ -560,3 +631,13 @@ with tabs[1]:
             st.dataframe(df_scaled_qqq)
         else:
             st.warning("No scaled data available to display.")
+
+        # Plot Percentage Changes as Bar Charts
+        st.subheader("Percentage Changes Every 30 Minutes (Bar Chart)")
+        fig_bar_qqq = plot_percentage_bar_charts(scaled_qqq_tickers)
+        st.plotly_chart(fig_bar_qqq)
+
+        # Plot Percentage Changes as Histograms
+        st.subheader("Distribution of Percentage Changes (Histogram)")
+        fig_hist_qqq = plot_percentage_histograms(scaled_qqq_tickers)
+        st.plotly_chart(fig_hist_qqq)
