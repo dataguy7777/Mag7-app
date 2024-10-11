@@ -4,11 +4,19 @@ import pandas as pd
 import pytz
 import datetime
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import logging
 from io import BytesIO
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
 
 # Define the Mag 7 companies
 mag7 = {
@@ -47,8 +55,7 @@ def to_excel(df):
             df_to_export.index = df_to_export.index.tz_convert(None)
         
         df_to_export.to_excel(writer, index=True, sheet_name='Sheet1')
-        # Remove or comment out the next line
-        # writer.save()
+        # Removed writer.save()
     processed_data = output.getvalue()
     logging.info("Dataframe exported to Excel successfully")
     return processed_data
@@ -123,13 +130,13 @@ def calculate_weighted_portfolio(mag7_data):
         logging.error("No data available to calculate weighted portfolio.")
         return pd.DataFrame()
 
-# Plot all Mag 7 companies and include MAGS ETF, Weighted Portfolio, Leveraged ETFs, QQQ3, and QQQ5
-def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data, qqq5_data, proxy_leveraged_portfolio):
+# Plot Mag7 with Leveraged ETFs and Weighted MAGS 5x
+def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_data, leveraged_5x_data, qqq3_data, qqq5_data, weighted_mags_5x):
     """
     Plot all Mag 7 companies' stock prices, along with the Weighted Mag 7 Portfolio, MAGS ETF,
-    Leveraged 5x ETF, QQQ3 Leveraged ETF, QQQ5 Leveraged ETF, and Proxy 5x Leveraged Portfolio.
+    Leveraged 5x ETF, QQQ3 Leveraged ETF, QQQ5 Leveraged ETF, and Weighted MAGS 5x Portfolio.
     """
-    logging.info("Plotting Mag 7 companies with leveraged ETFs and proxy")
+    logging.info("Plotting Mag 7 companies with leveraged ETFs and weighted MAGS 5x")
     fig = go.Figure()
 
     # Plot Mag 7 companies
@@ -160,19 +167,19 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         st.warning("Weighted Mag 7 Portfolio could not be calculated due to missing data.")
         logging.warning("Weighted Mag 7 Portfolio missing")
 
-    # Plot Proxy 5x Leveraged Portfolio
-    if not proxy_leveraged_portfolio.empty:
+    # Plot Weighted MAGS 5x Portfolio
+    if not weighted_mags_5x.empty:
         fig.add_trace(go.Scatter(
-            x=proxy_leveraged_portfolio.index,
-            y=proxy_leveraged_portfolio['Weighted Portfolio 5x'],
+            x=weighted_mags_5x.index,
+            y=weighted_mags_5x['Weighted MAGS 5x'],
             mode='lines',
-            name='Proxy 5x Weighted Portfolio',
+            name='Weighted MAGS 5x Portfolio',
             line=dict(dash='dot', color='green')
         ))
-        logging.info("Plotted Proxy 5x Weighted Portfolio")
+        logging.info("Plotted Weighted MAGS 5x Portfolio")
     else:
-        st.warning("Proxy 5x Weighted Portfolio could not be plotted due to missing data.")
-        logging.warning("Proxy 5x Weighted Portfolio missing")
+        st.warning("Weighted MAGS 5x Portfolio could not be plotted due to missing data.")
+        logging.warning("Weighted MAGS 5x Portfolio missing")
 
     # Plot MAGS ETF
     if not mags_filtered_data.empty:
@@ -232,7 +239,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 
     # Update layout
     fig.update_layout(
-        title="Mag 7 Companies, Weighted Portfolio, Proxy 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)",
+        title="Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (08:00 to 23:00 CEST)",
         xaxis_title='Date',
         yaxis_title='Adjusted Close Price',
         hovermode='x unified',
@@ -246,22 +253,25 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
         xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
     )
 
-    logging.info("Finished plotting Mag 7 and ETFs")
+    logging.info("Finished plotting Mag 7 and ETFs with Weighted MAGS 5x")
     return fig
 
-# Plot selected tickers scaled to 100
-def plot_selected_scaled_tickers(tickers_data):
+# Plot scaled performance and percentage changes
+def plot_scaled_performance(tickers_data):
     """
-    Plot selected tickers scaled to 100 at the beginning of the time series.
+    Plot scaled performance and percentage changes of selected tickers, sharing the same x-axis.
     """
-    logging.info("Plotting scaled performance of selected tickers")
-    fig = go.Figure()
+    logging.info("Plotting scaled performance and percentage changes of selected tickers")
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
+                        subplot_titles=("Scaled Performance of Selected Tickers",
+                                        "Percentage Changes Every 30 Minutes (Bar Chart)",
+                                        "Distribution of Percentage Changes (Histogram)"),
+                        vertical_spacing=0.1)
 
+    # 1. Scaled Performance
     for ticker, data in tickers_data.items():
         if not data.empty:
-            # Ensure data is sorted by date
             data = data.sort_index()
-            # Find the first non-NaN value for scaling
             first_valid_index = data['Adj Close'].first_valid_index()
             if first_valid_index is not None:
                 first_price = data.loc[first_valid_index, 'Adj Close']
@@ -271,7 +281,7 @@ def plot_selected_scaled_tickers(tickers_data):
                     y=scaled_prices,
                     mode='lines',
                     name=ticker
-                ))
+                ), row=1, col=1)
                 logging.info(f"Plotted scaled data for {ticker}")
             else:
                 st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
@@ -280,103 +290,45 @@ def plot_selected_scaled_tickers(tickers_data):
             st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
             logging.warning(f"No data available for {ticker}")
 
-    # Update layout
-    fig.update_layout(
-        title="Scaled Performance of Selected Tickers (100 at Start)",
-        xaxis_title='Date',
-        yaxis_title='Scaled Adjusted Close Price',
-        hovermode='x unified',
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5
-        ),  # Legend below the graph
-        xaxis_rangeslider_visible=False  # Disables range slider for cleaner view
-    )
-
-    logging.info("Finished plotting scaled tickers")
-    return fig
-
-# Plot percentage changes as bar charts
-def plot_percentage_bar_charts(tickers_data):
-    """
-    Plot bar charts showing % changes for each ticker over time.
-    """
-    logging.info("Plotting percentage changes as bar charts")
-    fig = go.Figure()
-
+    # 2. Percentage Changes Every 30 Minutes (Bar Chart)
     for ticker, data in tickers_data.items():
         if not data.empty:
-            # Calculate % change
             pct_change = data['Adj Close'].pct_change() * 100
-            # Drop the first NaN
             pct_change = pct_change.dropna()
             fig.add_trace(go.Bar(
                 x=pct_change.index,
                 y=pct_change.values,
                 name=f'{ticker} % Change',
                 opacity=0.6
-            ))
+            ), row=2, col=1)
             logging.info(f"Added bar chart for {ticker}")
 
-    fig.update_layout(
-        title="Percentage Changes Every 30 Minutes",
-        xaxis_title='Date',
-        yaxis_title='Percentage Change (%)',
-        hovermode='x unified',
-        barmode='overlay',
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5
-        ),
-        xaxis_rangeslider_visible=False
-    )
-
-    logging.info("Finished plotting bar charts")
-    return fig
-
-# Plot percentage changes as histograms
-def plot_percentage_histograms(tickers_data):
-    """
-    Plot histograms showing the distribution of % changes for each ticker.
-    """
-    logging.info("Plotting percentage changes as histograms")
-    fig = go.Figure()
-
+    # 3. Distribution of Percentage Changes (Histogram)
     for ticker, data in tickers_data.items():
         if not data.empty:
-            # Calculate % change
             pct_change = data['Adj Close'].pct_change() * 100
-            # Drop the first NaN
             pct_change = pct_change.dropna()
             fig.add_trace(go.Histogram(
                 x=pct_change.values,
                 name=f'{ticker} % Change',
                 opacity=0.6
-            ))
+            ), row=3, col=1)
             logging.info(f"Added histogram for {ticker}")
 
+    # Update layout
     fig.update_layout(
-        title="Distribution of Percentage Changes",
-        xaxis_title='Percentage Change (%)',
-        yaxis_title='Count',
+        height=900,
+        title_text="Scaled Performance, Percentage Changes, and Distribution of Selected Tickers",
         hovermode='x unified',
-        barmode='overlay',
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.3,
+            y=-0.25,
             xanchor="center",
             x=0.5
         )
     )
 
-    logging.info("Finished plotting histograms")
     return fig
 
 # Function to create dataframe with values and percentage changes
@@ -438,39 +390,36 @@ with tabs[0]:
 
     st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
-    # Time ranges for filtering
-    etf_start_time = datetime.time(9, 0)        # ETFs from 09:00 to 17:30 CEST
-    etf_end_time = datetime.time(17, 30)
-
-    company_start_time = datetime.time(15, 30)  # Companies from 15:30 to 22:00 CEST
-    company_end_time = datetime.time(22, 0)
+    # Define new unified time range
+    data_start_time = datetime.time(8, 0)   # 08:00 CEST
+    data_end_time = datetime.time(23, 0)    # 23:00 CEST
 
     # Fetch MAGS ETF data
     st.header(f"Comparing with MAGS ETF: {mags_etf}")
     mags_data = fetch_stock_data(mags_etf, start_date, end_date)
-    mags_filtered_data = filter_data_by_time_range(mags_data, etf_start_time, etf_end_time)
+    mags_filtered_data = filter_data_by_time_range(mags_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered MAGS ETF data")
 
     # Fetch Leveraged 5x ETF data
     st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
     leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
-    leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, etf_start_time, etf_end_time)
+    leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered Leveraged 5x ETF data")
 
     # Fetch QQQ3 Leveraged ETF data
     st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
     qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_filtered_data = filter_data_by_time_range(qqq3_data, etf_start_time, etf_end_time)
+    qqq3_filtered_data = filter_data_by_time_range(qqq3_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered QQQ3 Leveraged ETF data")
 
     # Fetch QQQ5 Leveraged ETF data
     st.header(f"QQQ5 Leveraged ETF: {qqq5_etf}")
     qqq5_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_filtered_data = filter_data_by_time_range(qqq5_data, etf_start_time, etf_end_time)
+    qqq5_filtered_data = filter_data_by_time_range(qqq5_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered QQQ5 Leveraged ETF data")
 
     # Plot MAGS ETF data
-    st.subheader(f"{mags_etf} ETF (9:00 to 17:30 CEST)")
+    st.subheader(f"{mags_etf} ETF (08:00 to 23:00 CEST)")
     if mags_data is None or mags_filtered_data.empty:
         st.warning(f"Data for {mags_etf} ETF could not be fetched.")
         logging.warning(f"No data for {mags_etf} ETF")
@@ -483,7 +432,7 @@ with tabs[0]:
             name=mags_etf
         ))
         fig_mags.update_layout(
-            title=f"{mags_etf} ETF Adjusted Close (9:00 to 17:30 CEST)",
+            title=f"{mags_etf} ETF Adjusted Close (08:00 to 23:00 CEST)",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
@@ -509,8 +458,8 @@ with tabs[0]:
             )
             logging.info("Added Export button for MAGS ETF dataframe")
 
-    # Fetch and filter data for Mag 7 companies (from 15:30 to 22:00 CEST)
-    st.header("Mag 7 Company Performance (15:30 to 22:00 CEST)")
+    # Fetch and filter data for Mag 7 companies (08:00 to 23:00 CEST)
+    st.header("Mag 7 Company Performance (08:00 to 23:00 CEST)")
     mag7_data = {}
 
     for company, ticker in mag7.items():
@@ -521,7 +470,7 @@ with tabs[0]:
             logging.error(f"Failed to fetch data for {company} ({ticker})")
             mag7_data[company] = pd.DataFrame()  # Assign empty DataFrame
         else:
-            filtered_data = filter_data_by_time_range(data, company_start_time, company_end_time)
+            filtered_data = filter_data_by_time_range(data, data_start_time, data_end_time)
             if filtered_data.empty:
                 st.warning(f"No data available for {company} ({ticker}) in the specified time range.")
                 logging.warning(f"No data for {company} ({ticker}) in specified time range")
@@ -531,17 +480,17 @@ with tabs[0]:
     # Calculate the weighted portfolio for the Mag 7 companies
     weighted_portfolio = calculate_weighted_portfolio(mag7_data)
 
-    # Create Proxy for 5x Leveraged Portfolio
+    # Create Weighted MAGS 5x Portfolio
     if not weighted_portfolio.empty:
-        proxy_leveraged_portfolio = weighted_portfolio.copy()
-        proxy_leveraged_portfolio['Weighted Portfolio 5x'] = proxy_leveraged_portfolio['Weighted Portfolio'] * 5
-        logging.info("Created Proxy for 5x Leveraged Portfolio")
+        weighted_mags_5x = weighted_portfolio.copy()
+        weighted_mags_5x['Weighted MAGS 5x'] = weighted_mags_5x['Weighted Portfolio'] * 5
+        logging.info("Created Weighted MAGS 5x Portfolio")
     else:
-        proxy_leveraged_portfolio = pd.DataFrame()
-        logging.warning("Weighted Mag 7 Portfolio missing; cannot create proxy")
+        weighted_mags_5x = pd.DataFrame()
+        logging.warning("Weighted Mag 7 Portfolio missing; cannot create Weighted MAGS 5x")
 
     # Plot all Mag 7 companies, weighted portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
-    st.subheader("All Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (15:30 to 22:00 CEST)")
+    st.subheader("All Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (08:00 to 23:00 CEST)")
     fig_mag7_companies = plot_mag7_with_leveraged_etf(
         mag7_data,
         weighted_portfolio,
@@ -549,12 +498,12 @@ with tabs[0]:
         leveraged_5x_filtered_data,
         qqq3_filtered_data,
         qqq5_filtered_data,
-        proxy_leveraged_portfolio
+        weighted_mags_5x
     )
     st.plotly_chart(fig_mag7_companies)
     logging.info("Displayed Mag 7 companies and ETFs plot")
 
-    # Create and display dataframe for Mag 7 Companies, Weighted Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
+    # Create and display dataframe for all tickers
     combined_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq5_etf]
     combined_data = {ticker: data for ticker, data in zip(
         combined_tickers, 
@@ -580,13 +529,13 @@ with tabs[0]:
         logging.warning("Combined dataframe is empty")
 
     # Prepare data for scaled performance plot
-    st.header("Scaled Performance of Selected Tickers")
+    st.header("Scaled Performance and Percentage Changes of Selected Tickers")
 
     # Display the selected date range
     st.write(f"**Date Range:** {start_date} to {end_date}")
     logging.info(f"Displaying scaled performance from {start_date} to {end_date}")
 
-    # Select tickers for the scaled performance graph: MAGS, MAG7.MI, Weighted Portfolio
+    # Select tickers for the scaled performance graph: MAGS, leveraged ETFs, Weighted Portfolio, Weighted MAGS 5x
     scaled_tickers = {}
     if not mags_filtered_data.empty:
         scaled_tickers[mags_etf] = mags_filtered_data
@@ -596,15 +545,15 @@ with tabs[0]:
         # Rename the column to 'Adj Close' for consistency in scaling
         scaled_portfolio = weighted_portfolio.rename(columns={'Weighted Portfolio': 'Adj Close'})
         scaled_tickers['Weighted Mag 7 Portfolio'] = scaled_portfolio
-    else:
-        st.warning("Weighted Mag 7 Portfolio could not be added to the scaled plot due to missing data.")
-        logging.warning("Weighted Mag 7 Portfolio missing for scaled plot")
+    if not weighted_mags_5x.empty:
+        scaled_mags_5x = weighted_mags_5x.rename(columns={'Weighted MAGS 5x': 'Adj Close'})
+        scaled_tickers['Weighted MAGS 5x Portfolio'] = scaled_mags_5x
 
     # Plot scaled performance only if there are tickers to plot
     if scaled_tickers:
-        fig_scaled = plot_selected_scaled_tickers(scaled_tickers)
+        fig_scaled = plot_scaled_performance(scaled_tickers)
         st.plotly_chart(fig_scaled)
-        logging.info("Displayed scaled performance plot")
+        logging.info("Displayed scaled performance and percentage changes plot")
 
         # Create and display dataframe for scaled performance
         st.subheader("Scaled Dataframe of Selected Tickers")
@@ -626,17 +575,7 @@ with tabs[0]:
             st.warning("No scaled data available to display.")
             logging.warning("Scaled dataframe is empty")
 
-        # Plot Percentage Changes as Bar Charts
-        st.subheader("Percentage Changes Every 30 Minutes (Bar Chart)")
-        fig_bar = plot_percentage_bar_charts(scaled_tickers)
-        st.plotly_chart(fig_bar)
-        logging.info("Displayed percentage changes bar chart")
-
-        # Plot Percentage Changes as Histograms
-        st.subheader("Distribution of Percentage Changes (Histogram)")
-        fig_hist = plot_percentage_histograms(scaled_tickers)
-        st.plotly_chart(fig_hist)
-        logging.info("Displayed percentage changes histogram")
+        # Note: The percentage changes and histograms are already included in the 'plot_scaled_performance' function as subplots
     else:
         st.warning("No tickers available to plot scaled performance.")
         logging.warning("No tickers available for scaled performance")
@@ -647,19 +586,19 @@ with tabs[1]:
     # Fetch QQQ ETF data
     st.subheader(f"QQQ ETF: {qqq_etf}")
     qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
-    qqq_filtered_data = filter_data_by_time_range(qqq_data, etf_start_time, etf_end_time)
+    qqq_filtered_data = filter_data_by_time_range(qqq_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered QQQ ETF data")
 
     # Fetch qqq3.mi Leveraged ETF data
     st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, etf_start_time, etf_end_time)
+    qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered qqq3.mi Leveraged ETF data")
 
     # Fetch qqq5.l Leveraged ETF data
     st.subheader(f"qqq5.l Leveraged ETF: {qqq5_etf}")
     qqq5_l_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data, etf_start_time, etf_end_time)
+    qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data, data_start_time, data_end_time)
     logging.info("Fetched and filtered qqq5.l Leveraged ETF data")
 
     # First Graph: QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
@@ -709,7 +648,7 @@ with tabs[1]:
             logging.warning("qqq5.l Leveraged ETF data missing")
 
         fig_qqq.update_layout(
-            title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l",
+            title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l (08:00 to 23:00 CEST)",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
