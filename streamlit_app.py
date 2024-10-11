@@ -47,7 +47,8 @@ def to_excel(df):
             df_to_export.index = df_to_export.index.tz_convert(None)
         
         df_to_export.to_excel(writer, index=True, sheet_name='Sheet1')
-        writer.save()
+        # Remove or comment out the next line
+        # writer.save()
     processed_data = output.getvalue()
     logging.info("Dataframe exported to Excel successfully")
     return processed_data
