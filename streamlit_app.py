@@ -48,14 +48,13 @@ def to_excel(df):
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         # Make a copy to avoid modifying the original DataFrame
         df_to_export = df.copy()
-        
+
         # Remove timezone information from the index if present
         if isinstance(df_to_export.index, pd.DatetimeIndex) and df_to_export.index.tz is not None:
             logging.info("Removing timezone information from datetime index")
             df_to_export.index = df_to_export.index.tz_convert(None)
-        
+
         df_to_export.to_excel(writer, index=True, sheet_name='Sheet1')
-        # Removed writer.save()
     processed_data = output.getvalue()
     logging.info("Dataframe exported to Excel successfully")
     return processed_data
@@ -78,14 +77,13 @@ def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
         logging.error(f"Error fetching data for {ticker}: {e}")
         return None
 
-# Caching the filter_data_by_time_range function
-@st.cache_data(show_spinner=False)
-def filter_data_by_time_range(data, start_time, end_time):
+# Adjusted function to include all time data
+def filter_data_by_time_range(data):
     """
-    Filter data for a specific time range after converting to CEST timezone.
+    Convert data to CEST timezone without filtering by time range.
     """
     if data is None or data.empty:
-        logging.warning("No data to filter")
+        logging.warning("No data to process")
         return pd.DataFrame()  # Return empty dataframe if no data is present
 
     cest = pytz.timezone('Europe/Berlin')
@@ -99,10 +97,8 @@ def filter_data_by_time_range(data, start_time, end_time):
             logging.error(f"Error localizing timezone for data: {e}")
             return pd.DataFrame()
 
-    # Filter by the given time range
-    data_filtered = data.between_time(start_time.strftime('%H:%M'), end_time.strftime('%H:%M'))
-    logging.info(f"Filtered data between {start_time} and {end_time}")
-    return data_filtered
+    logging.info("Data converted to CEST timezone without time filtering")
+    return data
 
 # Caching the calculate_weighted_portfolio function
 @st.cache_data(show_spinner=False)
@@ -239,7 +235,7 @@ def plot_mag7_with_leveraged_etf(mag7_data, weighted_portfolio, mags_filtered_da
 
     # Update layout
     fig.update_layout(
-        title="Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (08:00 to 23:00 CEST)",
+        title="Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs",
         xaxis_title='Date',
         yaxis_title='Adjusted Close Price',
         hovermode='x unified',
@@ -390,36 +386,32 @@ with tabs[0]:
 
     st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
-    # Define new unified time range
-    data_start_time = datetime.time(8, 0)   # 08:00 CEST
-    data_end_time = datetime.time(23, 0)    # 23:00 CEST
-
     # Fetch MAGS ETF data
     st.header(f"Comparing with MAGS ETF: {mags_etf}")
     mags_data = fetch_stock_data(mags_etf, start_date, end_date)
-    mags_filtered_data = filter_data_by_time_range(mags_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered MAGS ETF data")
+    mags_filtered_data = filter_data_by_time_range(mags_data)
+    logging.info("Fetched and processed MAGS ETF data")
 
     # Fetch Leveraged 5x ETF data
     st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
     leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
-    leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered Leveraged 5x ETF data")
+    leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data)
+    logging.info("Fetched and processed Leveraged 5x ETF data")
 
     # Fetch QQQ3 Leveraged ETF data
     st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
     qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_filtered_data = filter_data_by_time_range(qqq3_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered QQQ3 Leveraged ETF data")
+    qqq3_filtered_data = filter_data_by_time_range(qqq3_data)
+    logging.info("Fetched and processed QQQ3 Leveraged ETF data")
 
     # Fetch QQQ5 Leveraged ETF data
     st.header(f"QQQ5 Leveraged ETF: {qqq5_etf}")
     qqq5_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_filtered_data = filter_data_by_time_range(qqq5_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered QQQ5 Leveraged ETF data")
+    qqq5_filtered_data = filter_data_by_time_range(qqq5_data)
+    logging.info("Fetched and processed QQQ5 Leveraged ETF data")
 
     # Plot MAGS ETF data
-    st.subheader(f"{mags_etf} ETF (08:00 to 23:00 CEST)")
+    st.subheader(f"{mags_etf} ETF")
     if mags_data is None or mags_filtered_data.empty:
         st.warning(f"Data for {mags_etf} ETF could not be fetched.")
         logging.warning(f"No data for {mags_etf} ETF")
@@ -432,7 +424,7 @@ with tabs[0]:
             name=mags_etf
         ))
         fig_mags.update_layout(
-            title=f"{mags_etf} ETF Adjusted Close (08:00 to 23:00 CEST)",
+            title=f"{mags_etf} ETF Adjusted Close",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
@@ -458,8 +450,8 @@ with tabs[0]:
             )
             logging.info("Added Export button for MAGS ETF dataframe")
 
-    # Fetch and filter data for Mag 7 companies (08:00 to 23:00 CEST)
-    st.header("Mag 7 Company Performance (08:00 to 23:00 CEST)")
+    # Fetch and process data for Mag 7 companies
+    st.header("Mag 7 Company Performance")
     mag7_data = {}
 
     for company, ticker in mag7.items():
@@ -470,10 +462,10 @@ with tabs[0]:
             logging.error(f"Failed to fetch data for {company} ({ticker})")
             mag7_data[company] = pd.DataFrame()  # Assign empty DataFrame
         else:
-            filtered_data = filter_data_by_time_range(data, data_start_time, data_end_time)
+            filtered_data = filter_data_by_time_range(data)
             if filtered_data.empty:
-                st.warning(f"No data available for {company} ({ticker}) in the specified time range.")
-                logging.warning(f"No data for {company} ({ticker}) in specified time range")
+                st.warning(f"No data available for {company} ({ticker}).")
+                logging.warning(f"No data for {company} ({ticker})")
             mag7_data[company] = filtered_data
             logging.info(f"Processed data for {company} ({ticker})")
 
@@ -490,7 +482,7 @@ with tabs[0]:
         logging.warning("Weighted Mag 7 Portfolio missing; cannot create Weighted MAGS 5x")
 
     # Plot all Mag 7 companies, weighted portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
-    st.subheader("All Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs (08:00 to 23:00 CEST)")
+    st.subheader("All Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs")
     fig_mag7_companies = plot_mag7_with_leveraged_etf(
         mag7_data,
         weighted_portfolio,
@@ -506,7 +498,7 @@ with tabs[0]:
     # Create and display dataframe for all tickers
     combined_tickers = list(mag7.values()) + [mags_etf, leveraged_5x_etf, qqq3_etf, qqq5_etf]
     combined_data = {ticker: data for ticker, data in zip(
-        combined_tickers, 
+        combined_tickers,
         list(mag7_data.values()) + [mags_filtered_data, leveraged_5x_filtered_data, qqq3_filtered_data, qqq5_filtered_data]
     )}
     df_combined = create_dataframe(combined_data)
@@ -561,7 +553,7 @@ with tabs[0]:
         if not df_scaled.empty:
             st.dataframe(df_scaled)
             logging.info("Displayed scaled dataframe")
-            
+
             # Export to Excel button for scaled dataframe
             excel_scaled = to_excel(df_scaled)
             st.download_button(
@@ -586,20 +578,20 @@ with tabs[1]:
     # Fetch QQQ ETF data
     st.subheader(f"QQQ ETF: {qqq_etf}")
     qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
-    qqq_filtered_data = filter_data_by_time_range(qqq_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered QQQ ETF data")
+    qqq_filtered_data = filter_data_by_time_range(qqq_data)
+    logging.info("Fetched and processed QQQ ETF data")
 
     # Fetch qqq3.mi Leveraged ETF data
     st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered qqq3.mi Leveraged ETF data")
+    qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data)
+    logging.info("Fetched and processed qqq3.mi Leveraged ETF data")
 
     # Fetch qqq5.l Leveraged ETF data
     st.subheader(f"qqq5.l Leveraged ETF: {qqq5_etf}")
     qqq5_l_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data, data_start_time, data_end_time)
-    logging.info("Fetched and filtered qqq5.l Leveraged ETF data")
+    qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data)
+    logging.info("Fetched and processed qqq5.l Leveraged ETF data")
 
     # First Graph: QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
     st.subheader("Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l")
@@ -648,7 +640,7 @@ with tabs[1]:
             logging.warning("qqq5.l Leveraged ETF data missing")
 
         fig_qqq.update_layout(
-            title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l (08:00 to 23:00 CEST)",
+            title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
