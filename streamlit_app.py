@@ -77,8 +77,8 @@ def fetch_stock_data(ticker, start_date, end_date, interval='30m'):
         logging.error(f"Error fetching data for {ticker}: {e}")
         return None
 
-# Adjusted function to include all time data
-def filter_data_by_time_range(data):
+# Function to process data without time filtering, ensuring all 30-minute intervals are included
+def process_data_all_times(data):
     """
     Convert data to CEST timezone without filtering by time range.
     """
@@ -95,6 +95,14 @@ def filter_data_by_time_range(data):
             data.index = data.index.tz_localize('UTC').tz_convert(cest)
         except Exception as e:
             logging.error(f"Error localizing timezone for data: {e}")
+            return pd.DataFrame()
+    else:
+        # If already localized, convert to CEST
+        try:
+            logging.info("Converting data index to CEST timezone")
+            data = data.tz_convert(cest)
+        except Exception as e:
+            logging.error(f"Error converting timezone for data: {e}")
             return pd.DataFrame()
 
     logging.info("Data converted to CEST timezone without time filtering")
@@ -258,9 +266,8 @@ def plot_scaled_performance(tickers_data):
     Plot scaled performance and percentage changes of selected tickers, sharing the same x-axis.
     """
     logging.info("Plotting scaled performance and percentage changes of selected tickers")
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
-                        subplot_titles=("Scaled Performance of Selected Tickers",
-                                        "Percentage Changes Every 30 Minutes (Bar Chart)",
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        subplot_titles=("Scaled Relative Performance of Selected Tickers",
                                         "Distribution of Percentage Changes (Histogram)"),
                         vertical_spacing=0.1)
 
@@ -286,20 +293,7 @@ def plot_scaled_performance(tickers_data):
             st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
             logging.warning(f"No data available for {ticker}")
 
-    # 2. Percentage Changes Every 30 Minutes (Bar Chart)
-    for ticker, data in tickers_data.items():
-        if not data.empty:
-            pct_change = data['Adj Close'].pct_change() * 100
-            pct_change = pct_change.dropna()
-            fig.add_trace(go.Bar(
-                x=pct_change.index,
-                y=pct_change.values,
-                name=f'{ticker} % Change',
-                opacity=0.6
-            ), row=2, col=1)
-            logging.info(f"Added bar chart for {ticker}")
-
-    # 3. Distribution of Percentage Changes (Histogram)
+    # 2. Distribution of Percentage Changes (Histogram)
     for ticker, data in tickers_data.items():
         if not data.empty:
             pct_change = data['Adj Close'].pct_change() * 100
@@ -308,13 +302,13 @@ def plot_scaled_performance(tickers_data):
                 x=pct_change.values,
                 name=f'{ticker} % Change',
                 opacity=0.6
-            ), row=3, col=1)
+            ), row=2, col=1)
             logging.info(f"Added histogram for {ticker}")
 
     # Update layout
     fig.update_layout(
-        height=900,
-        title_text="Scaled Performance, Percentage Changes, and Distribution of Selected Tickers",
+        height=800,
+        title_text="Scaled Relative Performance and Distribution of Percentage Changes",
         hovermode='x unified',
         legend=dict(
             orientation="h",
@@ -389,25 +383,25 @@ with tabs[0]:
     # Fetch MAGS ETF data
     st.header(f"Comparing with MAGS ETF: {mags_etf}")
     mags_data = fetch_stock_data(mags_etf, start_date, end_date)
-    mags_filtered_data = filter_data_by_time_range(mags_data)
+    mags_filtered_data = process_data_all_times(mags_data)
     logging.info("Fetched and processed MAGS ETF data")
 
     # Fetch Leveraged 5x ETF data
     st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
     leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
-    leveraged_5x_filtered_data = filter_data_by_time_range(leveraged_5x_data)
+    leveraged_5x_filtered_data = process_data_all_times(leveraged_5x_data)
     logging.info("Fetched and processed Leveraged 5x ETF data")
 
     # Fetch QQQ3 Leveraged ETF data
     st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
     qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_filtered_data = filter_data_by_time_range(qqq3_data)
+    qqq3_filtered_data = process_data_all_times(qqq3_data)
     logging.info("Fetched and processed QQQ3 Leveraged ETF data")
 
     # Fetch QQQ5 Leveraged ETF data
     st.header(f"QQQ5 Leveraged ETF: {qqq5_etf}")
     qqq5_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_filtered_data = filter_data_by_time_range(qqq5_data)
+    qqq5_filtered_data = process_data_all_times(qqq5_data)
     logging.info("Fetched and processed QQQ5 Leveraged ETF data")
 
     # Plot MAGS ETF data
@@ -462,7 +456,7 @@ with tabs[0]:
             logging.error(f"Failed to fetch data for {company} ({ticker})")
             mag7_data[company] = pd.DataFrame()  # Assign empty DataFrame
         else:
-            filtered_data = filter_data_by_time_range(data)
+            filtered_data = process_data_all_times(data)
             if filtered_data.empty:
                 st.warning(f"No data available for {company} ({ticker}).")
                 logging.warning(f"No data for {company} ({ticker})")
@@ -521,7 +515,7 @@ with tabs[0]:
         logging.warning("Combined dataframe is empty")
 
     # Prepare data for scaled performance plot
-    st.header("Scaled Performance and Percentage Changes of Selected Tickers")
+    st.header("Scaled Performance of Selected Tickers")
 
     # Display the selected date range
     st.write(f"**Date Range:** {start_date} to {end_date}")
@@ -578,23 +572,32 @@ with tabs[1]:
     # Fetch QQQ ETF data
     st.subheader(f"QQQ ETF: {qqq_etf}")
     qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
-    qqq_filtered_data = filter_data_by_time_range(qqq_data)
+    qqq_filtered_data = process_data_all_times(qqq_data)
     logging.info("Fetched and processed QQQ ETF data")
 
     # Fetch qqq3.mi Leveraged ETF data
     st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
     qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
-    qqq3_mi_filtered_data = filter_data_by_time_range(qqq3_mi_data)
+    qqq3_mi_filtered_data = process_data_all_times(qqq3_mi_data)
     logging.info("Fetched and processed qqq3.mi Leveraged ETF data")
 
     # Fetch qqq5.l Leveraged ETF data
     st.subheader(f"qqq5.l Leveraged ETF: {qqq5_etf}")
     qqq5_l_data = fetch_stock_data(qqq5_etf, start_date, end_date)
-    qqq5_l_filtered_data = filter_data_by_time_range(qqq5_l_data)
+    qqq5_l_filtered_data = process_data_all_times(qqq5_l_data)
     logging.info("Fetched and processed qqq5.l Leveraged ETF data")
 
-    # First Graph: QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
-    st.subheader("Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l")
+    # Create PROXY QQQ3 and PROXY QQQ5 by multiplying QQQ Adjusted Close by 3 and 5 respectively
+    if not qqq_filtered_data.empty:
+        qqq_filtered_data['PROXY QQQ3'] = qqq_filtered_data['Adj Close'] * 3
+        qqq_filtered_data['PROXY QQQ5'] = qqq_filtered_data['Adj Close'] * 5
+        logging.info("Created PROXY QQQ3 and PROXY QQQ5")
+    else:
+        st.warning("QQQ ETF data is not available to create proxies.")
+        logging.warning("QQQ ETF data missing; cannot create proxies")
+
+    # Plot Adjusted Close Prices of QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5
+    st.subheader("Adjusted Close Prices of QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5")
     if (qqq_data is None or qqq_filtered_data.empty) and \
        (qqq3_mi_data is None or qqq3_mi_filtered_data.empty) and \
        (qqq5_l_data is None or qqq5_l_filtered_data.empty):
@@ -639,8 +642,35 @@ with tabs[1]:
             st.warning("qqq5.l Leveraged ETF data is not available, skipping in the plot.")
             logging.warning("qqq5.l Leveraged ETF data missing")
 
+        # Plot PROXY QQQ3 and PROXY QQQ5 if available
+        if not qqq_filtered_data.empty and 'PROXY QQQ3' in qqq_filtered_data.columns:
+            fig_qqq.add_trace(go.Scatter(
+                x=qqq_filtered_data.index,
+                y=qqq_filtered_data['PROXY QQQ3'],
+                mode='lines',
+                name='PROXY QQQ3 (QQQ * 3)',
+                line=dict(dash='dot', color='orange')
+            ))
+            logging.info("Plotted PROXY QQQ3")
+        else:
+            st.warning("PROXY QQQ3 data is not available, skipping in the plot.")
+            logging.warning("PROXY QQQ3 data missing")
+
+        if not qqq_filtered_data.empty and 'PROXY QQQ5' in qqq_filtered_data.columns:
+            fig_qqq.add_trace(go.Scatter(
+                x=qqq_filtered_data.index,
+                y=qqq_filtered_data['PROXY QQQ5'],
+                mode='lines',
+                name='PROXY QQQ5 (QQQ * 5)',
+                line=dict(dash='dash', color='brown')
+            ))
+            logging.info("Plotted PROXY QQQ5")
+        else:
+            st.warning("PROXY QQQ5 data is not available, skipping in the plot.")
+            logging.warning("PROXY QQQ5 data missing")
+
         fig_qqq.update_layout(
-            title="Adjusted Close Prices of QQQ, qqq3.mi, and qqq5.l",
+            title="Adjusted Close Prices of QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5",
             xaxis_title='Date',
             yaxis_title='Adjusted Close Price',
             hovermode='x unified',
@@ -655,25 +685,105 @@ with tabs[1]:
         )
 
         st.plotly_chart(fig_qqq)
-        logging.info("Displayed QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices plot")
+        logging.info("Displayed QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices plot")
 
-        # Create and display dataframe for QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices
+        # Create and display dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices
         df_qqq = create_dataframe({
             qqq_etf: qqq_filtered_data,
             qqq3_etf: qqq3_mi_filtered_data,
-            qqq5_etf: qqq5_l_filtered_data
+            qqq5_etf: qqq5_l_filtered_data,
+            'PROXY QQQ3': qqq_filtered_data[['PROXY QQQ3']],
+            'PROXY QQQ5': qqq_filtered_data[['PROXY QQQ5']]
         })
-        st.subheader("Dataframe for QQQ, qqq3.mi, and qqq5.l Adjusted Close Prices")
+        st.subheader("Dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices")
         st.dataframe(df_qqq)
-        logging.info("Displayed dataframe for QQQ, qqq3.mi, and qqq5.l")
+        logging.info("Displayed dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5")
 
-        # Export to Excel button for QQQ, qqq3.mi, and qqq5.l dataframe
+        # Export to Excel button for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 dataframe
         if not df_qqq.empty:
             excel_qqq = to_excel(df_qqq)
             st.download_button(
-                label="Export QQQ, qqq3.mi, and qqq5.l Data to Excel",
+                label="Export QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Data to Excel",
                 data=excel_qqq,
-                file_name='QQQ_Leveraged_ETFs_Data.xlsx',
+                file_name='QQQ_Leveraged_ETFs_Proxies_Data.xlsx',
                 mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )
-            logging.info("Added Export button for QQQ, qqq3.mi, and qqq5.l dataframe")
+            logging.info("Added Export button for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 dataframe")
+
+    # Plot Scaled Relative Evolution for QQQ Tab
+    st.subheader("Scaled Relative Performance of QQQ and Proxies")
+
+    # Prepare tickers for scaled relative performance: QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, PROXY QQQ5
+    scaled_qqq_tickers = {}
+    if not qqq_filtered_data.empty:
+        scaled_qqq_tickers[qqq_etf] = qqq_filtered_data
+        if 'PROXY QQQ3' in qqq_filtered_data.columns:
+            scaled_qqq_tickers['PROXY QQQ3'] = qqq_filtered_data[['PROXY QQQ3']]
+        if 'PROXY QQQ5' in qqq_filtered_data.columns:
+            scaled_qqq_tickers['PROXY QQQ5'] = qqq_filtered_data[['PROXY QQQ5']]
+    if not qqq3_mi_filtered_data.empty:
+        scaled_qqq_tickers[qqq3_etf] = qqq3_mi_filtered_data
+    if not qqq5_l_filtered_data.empty:
+        scaled_qqq_tickers[qqq5_etf] = qqq5_l_filtered_data
+
+    # Plot scaled relative performance
+    if scaled_qqq_tickers:
+        fig_scaled_qqq = go.Figure()
+        for ticker, data in scaled_qqq_tickers.items():
+            if not data.empty:
+                data = data.sort_index()
+                first_valid_index = data['Adj Close'].first_valid_index()
+                if first_valid_index is not None:
+                    first_price = data.loc[first_valid_index, 'Adj Close']
+                    scaled_prices = (data['Adj Close'] / first_price) * 100
+                    fig_scaled_qqq.add_trace(go.Scatter(
+                        x=data.index,
+                        y=scaled_prices,
+                        mode='lines',
+                        name=ticker
+                    ))
+                    logging.info(f"Plotted scaled data for {ticker}")
+                else:
+                    st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
+                    logging.warning(f"No valid adjusted close prices for {ticker}")
+            else:
+                st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
+                logging.warning(f"No data available for {ticker}")
+
+        fig_scaled_qqq.update_layout(
+            title="Scaled Relative Performance of QQQ and Proxies",
+            xaxis_title='Date',
+            yaxis_title='Scaled Adjusted Close Price (Start = 100)',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5
+            ),
+            xaxis_rangeslider_visible=False
+        )
+
+        st.plotly_chart(fig_scaled_qqq)
+        logging.info("Displayed Scaled Relative Performance of QQQ and Proxies plot")
+
+        # Create and display dataframe for scaled relative performance
+        df_scaled_qqq = create_dataframe(scaled_qqq_tickers)
+        st.subheader("Scaled Dataframe for QQQ and Proxies")
+        st.dataframe(df_scaled_qqq)
+        logging.info("Displayed scaled dataframe for QQQ and proxies")
+
+        # Export to Excel button for scaled relative performance dataframe
+        if not df_scaled_qqq.empty:
+            excel_scaled_qqq = to_excel(df_scaled_qqq)
+            st.download_button(
+                label="Export Scaled QQQ and Proxies Data to Excel",
+                data=excel_scaled_qqq,
+                file_name='Scaled_QQQ_Proxies_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            logging.info("Added Export button for scaled QQQ and proxies dataframe")
+    else:
+        st.warning("No tickers available to plot scaled relative performance.")
+        logging.warning("No tickers available for scaled relative performance")
