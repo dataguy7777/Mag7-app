@@ -368,4 +368,105 @@ with tabs[1]:
         )
 
         st.plotly_chart(fig_qqq)
-        logging.info("Displayed QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices 
+        logging.info("Displayed QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices plot")
+
+        # Create and display dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices
+        df_qqq = create_dataframe({
+            qqq_etf: qqq_filtered_data,
+            qqq3_etf: qqq3_mi_filtered_data,
+            qqq5_etf: qqq5_l_filtered_data,
+            'PROXY QQQ3': qqq_filtered_data[['PROXY QQQ3']],
+            'PROXY QQQ5': qqq_filtered_data[['PROXY QQQ5']]
+        })
+        st.subheader("Dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices")
+        st.dataframe(df_qqq)
+        logging.info("Displayed dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5")
+
+        # Export to Excel button for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 dataframe
+        if not df_qqq.empty:
+            excel_qqq = to_excel(df_qqq)
+            st.download_button(
+                label="Export QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Data to Excel",
+                data=excel_qqq,
+                file_name='QQQ_Leveraged_ETFs_Proxies_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            logging.info("Added Export button for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 dataframe")
+
+    # Plot Scaled Relative Evolution for QQQ Tab
+    st.subheader("Scaled Relative Performance of QQQ and Proxies")
+
+    # Prepare tickers for scaled relative performance: QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, PROXY QQQ5
+    scaled_qqq_tickers = {}
+    if not qqq_filtered_data.empty:
+        scaled_qqq_tickers[qqq_etf] = qqq_filtered_data
+        if 'PROXY QQQ3' in qqq_filtered_data.columns:
+            scaled_qqq_tickers['PROXY QQQ3'] = qqq_filtered_data[['PROXY QQQ3']]
+        if 'PROXY QQQ5' in qqq_filtered_data.columns:
+            scaled_qqq_tickers['PROXY QQQ5'] = qqq_filtered_data[['PROXY QQQ5']]
+    if not qqq3_mi_filtered_data.empty:
+        scaled_qqq_tickers[qqq3_etf] = qqq3_mi_filtered_data
+    if not qqq5_l_filtered_data.empty:
+        scaled_qqq_tickers[qqq5_etf] = qqq5_l_filtered_data
+
+    # Plot scaled relative performance
+    if scaled_qqq_tickers:
+        fig_scaled_qqq = go.Figure()
+        for ticker, data in scaled_qqq_tickers.items():
+            if not data.empty:
+                data = data.sort_index()
+                first_valid_index = data['Adj Close'].first_valid_index()
+                if first_valid_index is not None:
+                    first_price = data.loc[first_valid_index, 'Adj Close']
+                    scaled_prices = (data['Adj Close'] / first_price) * 100
+                    fig_scaled_qqq.add_trace(go.Scatter(
+                        x=data.index,
+                        y=scaled_prices,
+                        mode='lines',
+                        name=ticker
+                    ))
+                    logging.info(f"Plotted scaled data for {ticker}")
+                else:
+                    st.warning(f"No valid adjusted close prices for {ticker}, skipping in the scaled plot.")
+                    logging.warning(f"No valid adjusted close prices for {ticker}")
+            else:
+                st.warning(f"No data available for {ticker}, skipping in the scaled plot.")
+                logging.warning(f"No data available for {ticker}")
+
+        fig_scaled_qqq.update_layout(
+            title="Scaled Relative Performance of QQQ and Proxies",
+            xaxis_title='Date',
+            yaxis_title='Scaled Adjusted Close Price (Start = 100)',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5
+            ),
+            xaxis_rangeslider_visible=False
+        )
+
+        st.plotly_chart(fig_scaled_qqq)
+        logging.info("Displayed Scaled Relative Performance of QQQ and Proxies plot")
+
+        # Create and display dataframe for scaled relative performance
+        df_scaled_qqq = create_dataframe(scaled_qqq_tickers)
+        st.subheader("Scaled Dataframe for QQQ and Proxies")
+        st.dataframe(df_scaled_qqq)
+        logging.info("Displayed scaled dataframe for QQQ and proxies")
+
+        # Export to Excel button for scaled relative performance dataframe
+        if not df_scaled_qqq.empty:
+            excel_scaled_qqq = to_excel(df_scaled_qqq)
+            st.download_button(
+                label="Export Scaled QQQ and Proxies Data to Excel",
+                data=excel_scaled_qqq,
+                file_name='Scaled_QQQ_Proxies_Data.xlsx',
+                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            logging.info("Added Export button for scaled QQQ and proxies dataframe")
+    else:
+        st.warning("No tickers available to plot scaled relative performance.")
+        logging.warning("No tickers available for scaled relative performance")
