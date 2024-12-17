@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import logging
+import plotly.graph_objects as go  # Added Plotly import
 
 from utils import (
     setup_logging,
@@ -50,6 +51,11 @@ st.title('Mag 7 Stock Data Comparison with MAGS ETF and Leveraged ETFs')
 # Create tabs
 tabs = st.tabs(["Main", "QQQ"])
 
+# Caching data fetch to avoid redundancy
+@st.cache_data(ttl=1800)
+def get_data(ticker, start, end):
+    return fetch_stock_data(ticker, start, end)
+
 with tabs[0]:
     st.sidebar.header('Settings')
 
@@ -65,31 +71,23 @@ with tabs[0]:
 
     st.sidebar.write(f"Date range: {start_date} to {end_date}")
 
-    # Fetch MAGS ETF data
-    st.header(f"Comparing with MAGS ETF: {mags_etf}")
-    mags_data = fetch_stock_data(mags_etf, start_date, end_date)
+    # Fetch ETF data using cached function
+    mags_data = get_data(mags_etf, start_date, end_date)
+    leveraged_5x_data = get_data(leveraged_5x_etf, start_date, end_date)
+    qqq3_data = get_data(qqq3_etf, start_date, end_date)
+    qqq5_data = get_data(qqq5_etf, start_date, end_date)
+    qqq_data = get_data(qqq_etf, start_date, end_date)
+
+    # Process fetched data
     mags_filtered_data = process_data_all_times(mags_data)
-    logging.info("Fetched and processed MAGS ETF data")
-
-    # Fetch Leveraged 5x ETF data
-    st.header(f"Leveraged 5x ETF: {leveraged_5x_etf}")
-    leveraged_5x_data = fetch_stock_data(leveraged_5x_etf, start_date, end_date)
     leveraged_5x_filtered_data = process_data_all_times(leveraged_5x_data)
-    logging.info("Fetched and processed Leveraged 5x ETF data")
-
-    # Fetch QQQ3 Leveraged ETF data
-    st.header(f"QQQ3 Leveraged ETF: {qqq3_etf}")
-    qqq3_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_filtered_data = process_data_all_times(qqq3_data)
-    logging.info("Fetched and processed QQQ3 Leveraged ETF data")
-
-    # Fetch QQQ5 Leveraged ETF data
-    st.header(f"QQQ5 Leveraged ETF: {qqq5_etf}")
-    qqq5_data = fetch_stock_data(qqq5_etf, start_date, end_date)
     qqq5_filtered_data = process_data_all_times(qqq5_data)
-    logging.info("Fetched and processed QQQ5 Leveraged ETF data")
+
+    logging.info("Fetched and processed ETF data")
 
     # Plot MAGS ETF data
+    st.header(f"Comparing with MAGS ETF: {mags_etf}")
     st.subheader(f"{mags_etf} ETF")
     if mags_data is None or mags_filtered_data.empty:
         st.warning(f"Data for {mags_etf} ETF could not be fetched.")
@@ -135,7 +133,7 @@ with tabs[0]:
 
     for company, ticker in mag7.items():
         logging.info(f"Processing data for {company} ({ticker})")
-        data = fetch_stock_data(ticker, start_date, end_date)
+        data = get_data(ticker, start_date, end_date)
         if data is None:
             st.error(f"Failed to fetch data for {company} ({ticker}).")
             logging.error(f"Failed to fetch data for {company} ({ticker})")
@@ -160,7 +158,7 @@ with tabs[0]:
         weighted_mags_5x = pd.DataFrame()
         logging.warning("Weighted Mag 7 Portfolio missing; cannot create Weighted MAGS 5x")
 
-    # Plot all Mag 7 companies, weighted portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 Leveraged ETF, and QQQ5 Leveraged ETF
+    # Plot all Mag 7 companies and ETFs
     st.subheader("All Mag 7 Companies, Weighted Portfolio, Weighted MAGS 5x Portfolio, MAGS ETF, Leveraged 5x ETF, QQQ3 & QQQ5 Leveraged ETFs")
     fig_mag7_companies = plot_mag7_with_leveraged_etf(
         mag7_data,
@@ -206,21 +204,20 @@ with tabs[0]:
     st.write(f"**Date Range:** {start_date} to {end_date}")
     logging.info(f"Displaying scaled performance from {start_date} to {end_date}")
 
-    # Select tickers for the scaled performance graph: MAGS, leveraged ETFs, Weighted Portfolio, Weighted MAGS 5x
+    # Select tickers for the scaled performance graph
     scaled_tickers = {}
     if not mags_filtered_data.empty:
         scaled_tickers[mags_etf] = mags_filtered_data
     if not leveraged_5x_filtered_data.empty:
         scaled_tickers[leveraged_5x_etf] = leveraged_5x_filtered_data
     if not weighted_portfolio.empty:
-        # Rename the column to 'Adj Close' for consistency in scaling
         scaled_portfolio = weighted_portfolio.rename(columns={'Weighted Portfolio': 'Adj Close'})
         scaled_tickers['Weighted Mag 7 Portfolio'] = scaled_portfolio
     if not weighted_mags_5x.empty:
         scaled_mags_5x = weighted_mags_5x.rename(columns={'Weighted MAGS 5x': 'Adj Close'})
         scaled_tickers['Weighted MAGS 5x Portfolio'] = scaled_mags_5x
 
-    # Plot scaled performance only if there are tickers to plot
+    # Plot scaled performance
     if scaled_tickers:
         fig_scaled = plot_scaled_performance(scaled_tickers)
         st.plotly_chart(fig_scaled)
@@ -252,34 +249,29 @@ with tabs[0]:
 with tabs[1]:
     st.header("QQQ Comparison")
 
-    # Fetch QQQ ETF data
-    st.subheader(f"QQQ ETF: {qqq_etf}")
-    qqq_data = fetch_stock_data(qqq_etf, start_date, end_date)
+    # Fetch QQQ and Leveraged ETF data using cached function
+    qqq_data = get_data(qqq_etf, start_date, end_date)
+    qqq3_mi_data = get_data(qqq3_etf, start_date, end_date)
+    qqq5_l_data = get_data(qqq5_etf, start_date, end_date)
+
+    # Process fetched data
     qqq_filtered_data = process_data_all_times(qqq_data)
-    logging.info("Fetched and processed QQQ ETF data")
-
-    # Fetch qqq3.mi Leveraged ETF data
-    st.subheader(f"qqq3.mi Leveraged ETF: {qqq3_etf}")
-    qqq3_mi_data = fetch_stock_data(qqq3_etf, start_date, end_date)
     qqq3_mi_filtered_data = process_data_all_times(qqq3_mi_data)
-    logging.info("Fetched and processed qqq3.mi Leveraged ETF data")
-
-    # Fetch qqq5.l Leveraged ETF data
-    st.subheader(f"qqq5.l Leveraged ETF: {qqq5_etf}")
-    qqq5_l_data = fetch_stock_data(qqq5_etf, start_date, end_date)
     qqq5_l_filtered_data = process_data_all_times(qqq5_l_data)
-    logging.info("Fetched and processed qqq5.l Leveraged ETF data")
 
-    # Create PROXY QQQ3 and PROXY QQQ5 by multiplying QQQ Adjusted Close by 3 and 5 respectively
+    logging.info("Fetched and processed QQQ and Leveraged ETF data")
+
+    # Create proxies without modifying original DataFrame
     if not qqq_filtered_data.empty:
-        qqq_filtered_data['PROXY QQQ3'] = qqq_filtered_data['Adj Close'] * 3
-        qqq_filtered_data['PROXY QQQ5'] = qqq_filtered_data['Adj Close'] * 5
+        qqq_proxy = qqq_filtered_data.copy()
+        qqq_proxy['PROXY QQQ3'] = qqq_proxy['Adj Close'] * 3
+        qqq_proxy['PROXY QQQ5'] = qqq_proxy['Adj Close'] * 5
         logging.info("Created PROXY QQQ3 and PROXY QQQ5")
     else:
         st.warning("QQQ ETF data is not available to create proxies.")
         logging.warning("QQQ ETF data missing; cannot create proxies")
 
-    # Plot Adjusted Close Prices of QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5
+    # Plot Adjusted Close Prices
     st.subheader("Adjusted Close Prices of QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5")
     if (qqq_data is None or qqq_filtered_data.empty) and \
        (qqq3_mi_data is None or qqq3_mi_filtered_data.empty) and \
@@ -325,11 +317,11 @@ with tabs[1]:
             st.warning("qqq5.l Leveraged ETF data is not available, skipping in the plot.")
             logging.warning("qqq5.l Leveraged ETF data missing")
 
-        # Plot PROXY QQQ3 and PROXY QQQ5 if available
-        if not qqq_filtered_data.empty and 'PROXY QQQ3' in qqq_filtered_data.columns:
+        # Plot proxies if available
+        if not qqq_filtered_data.empty and 'PROXY QQQ3' in qqq_proxy.columns:
             fig_qqq.add_trace(go.Scatter(
-                x=qqq_filtered_data.index,
-                y=qqq_filtered_data['PROXY QQQ3'],
+                x=qqq_proxy.index,
+                y=qqq_proxy['PROXY QQQ3'],
                 mode='lines',
                 name='PROXY QQQ3 (QQQ * 3)',
                 line=dict(dash='dot', color='orange')
@@ -339,10 +331,10 @@ with tabs[1]:
             st.warning("PROXY QQQ3 data is not available, skipping in the plot.")
             logging.warning("PROXY QQQ3 data missing")
 
-        if not qqq_filtered_data.empty and 'PROXY QQQ5' in qqq_filtered_data.columns:
+        if not qqq_filtered_data.empty and 'PROXY QQQ5' in qqq_proxy.columns:
             fig_qqq.add_trace(go.Scatter(
-                x=qqq_filtered_data.index,
-                y=qqq_filtered_data['PROXY QQQ5'],
+                x=qqq_proxy.index,
+                y=qqq_proxy['PROXY QQQ5'],
                 mode='lines',
                 name='PROXY QQQ5 (QQQ * 5)',
                 line=dict(dash='dash', color='brown')
@@ -370,19 +362,19 @@ with tabs[1]:
         st.plotly_chart(fig_qqq)
         logging.info("Displayed QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices plot")
 
-        # Create and display dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices
+        # Create and display dataframe for QQQ and Proxies
         df_qqq = create_dataframe({
             qqq_etf: qqq_filtered_data,
             qqq3_etf: qqq3_mi_filtered_data,
             qqq5_etf: qqq5_l_filtered_data,
-            'PROXY QQQ3': qqq_filtered_data[['PROXY QQQ3']],
-            'PROXY QQQ5': qqq_filtered_data[['PROXY QQQ5']]
+            'PROXY QQQ3': qqq_proxy[['PROXY QQQ3']] if not qqq_proxy.empty else pd.DataFrame(),
+            'PROXY QQQ5': qqq_proxy[['PROXY QQQ5']] if not qqq_proxy.empty else pd.DataFrame()
         })
         st.subheader("Dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 Adjusted Close Prices")
         st.dataframe(df_qqq)
         logging.info("Displayed dataframe for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5")
 
-        # Export to Excel button for QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, and PROXY QQQ5 dataframe
+        # Export to Excel button for QQQ dataframe
         if not df_qqq.empty:
             excel_qqq = to_excel(df_qqq)
             st.download_button(
@@ -396,14 +388,14 @@ with tabs[1]:
     # Plot Scaled Relative Evolution for QQQ Tab
     st.subheader("Scaled Relative Performance of QQQ and Proxies")
 
-    # Prepare tickers for scaled relative performance: QQQ, qqq3.mi, qqq5.l, PROXY QQQ3, PROXY QQQ5
+    # Prepare tickers for scaled relative performance
     scaled_qqq_tickers = {}
     if not qqq_filtered_data.empty:
         scaled_qqq_tickers[qqq_etf] = qqq_filtered_data
-        if 'PROXY QQQ3' in qqq_filtered_data.columns:
-            scaled_qqq_tickers['PROXY QQQ3'] = qqq_filtered_data[['PROXY QQQ3']]
-        if 'PROXY QQQ5' in qqq_filtered_data.columns:
-            scaled_qqq_tickers['PROXY QQQ5'] = qqq_filtered_data[['PROXY QQQ5']]
+        if 'PROXY QQQ3' in qqq_proxy.columns:
+            scaled_qqq_tickers['PROXY QQQ3'] = qqq_proxy[['PROXY QQQ3']]
+        if 'PROXY QQQ5' in qqq_proxy.columns:
+            scaled_qqq_tickers['PROXY QQQ5'] = qqq_proxy[['PROXY QQQ5']]
     if not qqq3_mi_filtered_data.empty:
         scaled_qqq_tickers[qqq3_etf] = qqq3_mi_filtered_data
     if not qqq5_l_filtered_data.empty:
